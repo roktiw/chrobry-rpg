@@ -31,6 +31,7 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   pos: {x:3000, y:3000}, vel: {x:0, y:0}, facing: {x:1, y:0},
   hp: 100, hpMax: 100, mp: 50, mpMax: 50,
   level: 1, xp: 0, gold: 0,
+  lives: 3, // Liczba żyć gracza
   speed: 2.8,
   attack: { cooldown: 0, cdMelee: 400, cdRanged: 300 },
   meleeDamage: 18, // Siła ataku wręcz
@@ -49,6 +50,7 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
     plantingMode: false, // Mode for planting trees
     interactionMode: false, // Mode for interacting with NPCs
     quests: { tree: false, son: false, book: false },
+    lastMinuteSpawn: 0, // Timer for periodic enemy spawning (every minute)
   // New: NPCs
   woman: { x: 3500, y: 3500, t: 0, givenApples: 0, givenMeat: 0 },
   // New: Children
@@ -56,7 +58,10 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   wizard: { x: 2500, y: 2500, t: 0, givenMeat: 0, givenApples: 0, givenGold: 0 },
   // New: trees and home
   trees: [],
-  home: { x: 3000, y: 2800 } // Domek nad graczem na starcie
+  home: { x: 3000, y: 2800 }, // Domek nad graczem na starcie
+  // New: nests/spawners for enemies
+  nests: [], // Array of nests: { type: enemyIndex, x, y, hp, hpMax, spawnTimer, nextSpawn, id, respawnTimer }
+  nestRespawns: [] // Array of pending respawns: { type: enemyIndex, timer: 30000 }
 };
 
   // Initialize missing stats for old saves
@@ -65,6 +70,10 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
   if(state.inventory.wood === undefined) state.inventory.wood = 0;
   if(state.interactionMode === undefined) state.interactionMode = false;
+  if(state.lastMinuteSpawn === undefined) state.lastMinuteSpawn = 0;
+  if(state.nests === undefined) state.nests = [];
+  if(state.nestRespawns === undefined) state.nestRespawns = [];
+  if(state.lives === undefined) state.lives = 3;
 
   // Initialize trees
   if(state.trees.length === 0) {
@@ -383,6 +392,8 @@ const goldEl = document.getElementById('gold');
     xpNum.textContent = `${state.xp}/${need}`;
     lvlNum.textContent = state.level;
     goldEl.textContent = state.gold;
+    const livesDisplay = document.getElementById('livesDisplay');
+    if(livesDisplay) livesDisplay.textContent = state.lives;
     updateQuestLog();
   }
 
@@ -760,7 +771,28 @@ function spawnEnemy(){
   const ang = rand(0, Math.PI*2), dist = rand(400, 900);
   const ex = clamp(state.pos.x + Math.cos(ang)*dist, 0, state.world.width);
   const ey = clamp(state.pos.y + Math.sin(ang)*dist, 0, state.world.height);
-  state.enemies.push({ ...e, x:ex, y:ey, hp:e.hp, t:0, id:Math.random().toString(36).slice(2) });
+  state.enemies.push({ ...e, x:ex, y:ey, hp:e.hp, t:0, id:Math.random().toString(36).slice(2), nestId: null });
+}
+
+function spawnEnemyFromNest(nest) {
+  const enemyDef = ENEMIES[nest.type];
+  if(!enemyDef) return;
+  
+  // Spawn enemy near nest (within guard radius)
+  const ang = rand(0, Math.PI*2);
+  const dist = rand(30, nest.guardRadius * 0.8);
+  const ex = (nest.x + Math.cos(ang)*dist + state.world.width) % state.world.width;
+  const ey = (nest.y + Math.sin(ang)*dist + state.world.height) % state.world.height;
+  
+  state.enemies.push({ 
+    ...enemyDef, 
+    x: ex, 
+    y: ey, 
+    hp: enemyDef.hp, 
+    t: 0, 
+    id: Math.random().toString(36).slice(2),
+    nestId: nest.id // Link enemy to nest for guard behavior
+  });
 }
 function spawnPickup(kind, x, y, value, direction){
   const spec = PICKUPS[kind];
@@ -829,7 +861,42 @@ function spawnPickup(kind, x, y, value, direction){
     groundY // Will be set when it stops bouncing
   });
 }
+function spawnNest(enemyTypeIndex) {
+  // Check if nest for this enemy type already exists
+  if(state.nests.some(n => n.type === enemyTypeIndex)) return;
+  
+  const enemyDef = ENEMIES[enemyTypeIndex];
+  if(!enemyDef) return;
+  
+  // Spawn nest away from player
+  const ang = rand(0, Math.PI*2);
+  const dist = rand(800, 1500);
+  const nx = clamp(state.pos.x + Math.cos(ang)*dist, 200, state.world.width - 200);
+  const ny = clamp(state.pos.y + Math.sin(ang)*dist, 200, state.world.height - 200);
+  
+  // HP legowiska = 5x więcej niż normalny mob
+  const hpMax = enemyDef.hp * 5;
+  const nextSpawn = rand(7000, 21000); // 7-21 seconds
+  
+  state.nests.push({
+    type: enemyTypeIndex,
+    x: nx,
+    y: ny,
+    hp: hpMax,
+    hpMax: hpMax,
+    spawnTimer: 0,
+    nextSpawn: nextSpawn,
+    id: Math.random().toString(36).slice(2),
+    guardRadius: 200 // Promień ochrony legowiska
+  });
+}
+
 function spawnInitial(){
+  // Spawn nests for each enemy type
+  for(let i = 0; i < ENEMIES.length; i++) {
+    spawnNest(i);
+  }
+  
   for(let i=0;i<28;i++) spawnEnemy();
   for(let i=0;i<40;i++){
     spawnPickup(Math.random()<.5?'meat':'mead', rand(0,state.world.width), rand(0,state.world.height));
@@ -847,9 +914,9 @@ function startMeleeSpin(){
 
 function fireArrow(target){
   if(state.attack.cooldown>0 || state.paused) return;
-  if(state.mp < 6) return; // koszt many
+  if(state.mp < 3) return; // koszt many (zmniejszony z 6 na 3)
   const oldMP = state.mp;
-  state.mp = clamp(state.mp-6, 0, state.mpMax);
+  state.mp = clamp(state.mp-3, 0, state.mpMax); // Zmniejszony koszt many z 6 na 3
   animateBar('mp', (oldMP/state.mpMax)*100, (state.mp/state.mpMax)*100);
   state.attack.cooldown = state.attack.cdRanged;
   let ax, ay;
@@ -965,7 +1032,9 @@ function gainXP(v){
   if(state.xp >= need){
     state.level++;
     state.xp = 0;
+    state.lives++; // +1 życie za każdy level up
     animateBar('xp', oldPercent, 0);
+    toast(`🎉 Awans na poziom ${state.level}! +1 życie`);
     openLevelUp();
   } else {
     const newPercent = (state.xp/need)*100;
@@ -975,6 +1044,8 @@ function gainXP(v){
 
 // === Level Up Modal ===
 const levelUpModal = document.getElementById('levelUpModal');
+const startScreenModal = document.getElementById('startScreenModal');
+const startGameBtn = document.getElementById('startGameBtn');
 const lvlUpTo = document.getElementById('lvlUpTo');
 const levelUpPoints = document.getElementById('levelUpPoints');
 const upHPValue = document.getElementById('upHPValue');
@@ -1200,6 +1271,44 @@ function step(dt){
         if(e.hp<=0) killEnemy(e);
       }
     }
+    
+    // Check for nest hits
+    for(const nest of state.nests) {
+      if(m.hit.has(nest.id)) continue; // Prevent multiple hits per spin
+      // Handle wrap-around distance
+      let dx = nest.x - sx, dy = nest.y - sy;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      if(Math.hypot(dx, dy) < 30) { // Same range as enemy hit
+        m.hit.add(nest.id);
+        nest.hp -= state.meleeDamage;
+        floatingText(`-${state.meleeDamage}`, nest.x, nest.y, '#8B4513'); // Brown color for nest damage
+        
+        if(nest.hp <= 0) {
+          // Nest destroyed, drop items and schedule respawn
+          const dropCount = Math.round(rand(1, 3)) * state.level; // 1-3 items per level
+          for(let i = 0; i < dropCount; i++) {
+            const dropDir = {x: rand(-0.8, 0.8), y: -0.5};
+            const dropTypes = ['meat', 'apple', 'mead', 'gold', 'seed'];
+            const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
+            spawnPickup(dropType, nest.x, nest.y, undefined, dropDir);
+          }
+          
+          // Schedule respawn after 30 seconds
+          state.nestRespawns.push({
+            type: nest.type,
+            timer: 30000 // 30 seconds
+          });
+          
+          const nestIdx = state.nests.findIndex(n => n.id === nest.id);
+          if(nestIdx >= 0) {
+            state.nests.splice(nestIdx, 1);
+            toast(`🏰 Legowisko zniszczone! +${dropCount} przedmiotów`);
+          }
+        }
+      }
+    }
+    
     if(m.t>=m.dur) state.meleeSpin=null;
   }
 
@@ -1254,21 +1363,92 @@ function step(dt){
     }
   }
 
+  // Nests: spawn enemies and handle respawns
+  for(const nest of state.nests) {
+    // Update spawn timer
+    nest.spawnTimer += dt;
+    if(nest.spawnTimer >= nest.nextSpawn) {
+      nest.spawnTimer = 0;
+      nest.nextSpawn = rand(7000, 21000); // 7-21 seconds
+      spawnEnemyFromNest(nest);
+    }
+  }
+  
+  // Handle nest respawns
+  for(let i = state.nestRespawns.length - 1; i >= 0; i--) {
+    const respawn = state.nestRespawns[i];
+    respawn.timer -= dt;
+    if(respawn.timer <= 0) {
+      spawnNest(respawn.type);
+      state.nestRespawns.splice(i, 1);
+    }
+  }
+
   // move & simple AI
   for(const e of state.enemies){
     e.t+=dt; 
-    // Handle wrap-around distance
-    let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
-    if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
-    if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-    const d = Math.hypot(dx,dy);
-    if(d<380){ 
-      e.x += (dx/d)*e.speed; 
-      e.y += (dy/d)*e.speed; 
-    }
-    else { 
-      e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
-      e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+    
+    // If enemy has nestId, guard the nest
+    if(e.nestId) {
+      const nest = state.nests.find(n => n.id === e.nestId);
+      if(nest) {
+        // Handle wrap-around distance to nest
+        let dx = nest.x - e.x, dy = nest.y - e.y;
+        if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+        if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+        const distToNest = Math.hypot(dx, dy);
+        
+        // If too far from nest, return to guard position
+        if(distToNest > nest.guardRadius) {
+          const returnSpeed = e.speed * 0.8; // Slightly slower when returning
+          e.x += (dx/distToNest) * returnSpeed;
+          e.y += (dy/distToNest) * returnSpeed;
+        } else {
+          // Guard behavior: patrol around nest or attack player if nearby
+          let dxPlayer = state.pos.x - e.x, dyPlayer = state.pos.y - e.y;
+          if(Math.abs(dxPlayer) > state.world.width / 2) dxPlayer = dxPlayer > 0 ? dxPlayer - state.world.width : dxPlayer + state.world.width;
+          if(Math.abs(dyPlayer) > state.world.height / 2) dyPlayer = dyPlayer > 0 ? dyPlayer - state.world.height : dyPlayer + state.world.height;
+          const dPlayer = Math.hypot(dxPlayer, dyPlayer);
+          
+          if(dPlayer < 380) {
+            // Attack player if in range
+            e.x += (dxPlayer/dPlayer) * e.speed;
+            e.y += (dyPlayer/dPlayer) * e.speed;
+          } else {
+            // Patrol around nest
+            const patrolAngle = e.t * 0.001 + e.id.charCodeAt(0) * 0.1; // Unique angle per enemy
+            const patrolDist = nest.guardRadius * 0.6;
+            const targetX = nest.x + Math.cos(patrolAngle) * patrolDist;
+            const targetY = nest.y + Math.sin(patrolAngle) * patrolDist;
+            let dxPatrol = targetX - e.x, dyPatrol = targetY - e.y;
+            if(Math.abs(dxPatrol) > state.world.width / 2) dxPatrol = dxPatrol > 0 ? dxPatrol - state.world.width : dxPatrol + state.world.width;
+            if(Math.abs(dyPatrol) > state.world.height / 2) dyPatrol = dyPatrol > 0 ? dyPatrol - state.world.height : dyPatrol + state.world.height;
+            const dPatrol = Math.hypot(dxPatrol, dyPatrol);
+            if(dPatrol > 5) {
+              e.x += (dxPatrol/dPatrol) * e.speed * 0.5;
+              e.y += (dyPatrol/dPatrol) * e.speed * 0.5;
+            }
+          }
+        }
+      } else {
+        // Nest destroyed, enemy becomes normal
+        e.nestId = null;
+      }
+    } else {
+      // Normal enemy AI (no nest)
+      // Handle wrap-around distance
+      let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      const d = Math.hypot(dx,dy);
+      if(d<380){ 
+        e.x += (dx/d)*e.speed; 
+        e.y += (dy/d)*e.speed; 
+      }
+      else { 
+        e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
+        e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+      }
     }
     
     // Update enemy knockback
@@ -1518,9 +1698,57 @@ function step(dt){
   }
 
   // śmierć i respawn miękki
-  if(state.hp<=0){ toast('💀 Zginąłeś!'); state.hp=state.hpMax; state.mp=state.mpMax; state.pos={x:3000,y:3000}; state.enemies=[]; state.pickups=[]; state.projectiles=[]; state.children=[]; spawnInitial(); }
+  if(state.hp<=0){
+    state.lives--;
+    if(state.lives > 0) {
+      toast(`💀 Zginąłeś! Pozostało żyć: ${state.lives}`);
+      state.paused = true;
+      showStartScreen(); // Pokaż ekran startowy po śmierci
+      // Reset pozycji i wrogów, ale zachowaj stan świata
+      state.hp = state.hpMax;
+      state.mp = state.mpMax;
+      state.pos = {x:3000, y:3000};
+      state.enemies = [];
+      state.pickups = [];
+      state.projectiles = [];
+      state.children = [];
+      // Nie resetuj jaskini i drzew - zachowaj stan świata
+    } else {
+      // Game Over - pokaż ekran startowy
+      toast('💀 Game Over! Wszystkie życia wykorzystane.');
+      state.paused = true;
+      showStartScreen();
+      // Reset gry
+      state.hp = state.hpMax;
+      state.mp = state.mpMax;
+      state.pos = {x:3000, y:3000};
+      state.enemies = [];
+      state.pickups = [];
+      state.projectiles = [];
+      state.children = [];
+      state.nests = [];
+      state.nestRespawns = [];
+      state.trees = [];
+      state.lives = 3;
+      state.level = 1;
+      state.xp = 0;
+      state.gold = 0;
+      spawnInitial();
+    }
+  }
 
-  // spawny
+  // Periodic enemy spawn every minute
+  state.lastMinuteSpawn += dt;
+  if(state.lastMinuteSpawn >= 60000) { // 60 seconds = 60000ms
+    state.lastMinuteSpawn = 0;
+    const enemiesToSpawn = Math.round(rand(5, 12)); // Spawn 5-12 enemies every minute
+    for(let i = 0; i < enemiesToSpawn; i++) {
+      spawnEnemy();
+    }
+    toast(`⚠️ Pojawiło się ${enemiesToSpawn} nowych wrogów!`);
+  }
+  
+  // spawny (random spawns - keep existing logic)
   if(state.enemies.length<26 && Math.random()<0.03) spawnEnemy();
   if(Math.random()<0.02) {
     const dropDir = {x: rand(-0.5, 0.5), y: -0.5};
@@ -1562,6 +1790,30 @@ function draw(){
   renderWithWrapAround(state.home.x, state.home.y, (s) => {
     ctx.fillText('🏠', s.x, s.y);
   });
+
+  // Nests - optimized rendering (show animal emoji for each nest type)
+  // Legowiska są 2x większe od normalnych mobów (wrogowie: 30px, legowiska: 60px)
+  ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
+  for(const nest of state.nests) {
+    renderWithWrapAround(nest.x, nest.y, (s) => {
+      const enemyDef = ENEMIES[nest.type];
+      if(enemyDef) {
+        // Show animal emoji (e.g., 🐺 for wolf nest, 🐗 for boar nest, etc.)
+        ctx.fillText(enemyDef.emoji, s.x, s.y);
+      } else {
+        ctx.fillText('🏰', s.x, s.y); // Fallback
+      }
+      // Show HP bar if in interaction mode
+      if(state.interactionMode) {
+        const hpPercent = nest.hp / nest.hpMax;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(s.x - 20, s.y - 40, 40, 6);
+        ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
+        ctx.fillRect(s.x - 20, s.y - 40, 40 * hpPercent, 6);
+        ctx.fillStyle = '#e6e6e6';
+      }
+    });
+  }
 
   // pickups - optimized rendering
   ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
@@ -1635,6 +1887,34 @@ function loop(){
   updateHUD(); // Now throttled internally
   requestAnimationFrame(loop); 
 }
+
+// Start screen functions
+function showStartScreen() {
+  if(startScreenModal && startGameBtn) {
+    const startScreenLives = document.getElementById('startScreenLives');
+    const startScreenLevel = document.getElementById('startScreenLevel');
+    if(startScreenLives) startScreenLives.textContent = state.lives;
+    if(startScreenLevel) startScreenLevel.textContent = state.level;
+    startScreenModal.style.display = 'flex';
+    state.paused = true;
+  }
+}
+
+function hideStartScreen() {
+  if(startScreenModal) {
+    startScreenModal.style.display = 'none';
+    state.paused = false;
+  }
+}
+
+if(startGameBtn) {
+  startGameBtn.addEventListener('click', () => {
+    hideStartScreen();
+  });
+}
+
+// Show start screen on game load
+showStartScreen();
 
 // init
 spawnInitial();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Chrobry RPG — emoji</title>
+  <title>👨 ChrobryRPG</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
   <div id="ui">
     <header>
       <div class="hud-compact">
-        <div class="pill" style="flex-shrink:0">🏰 <strong>Chrobry</strong></div>
+        <div class="pill" style="flex-shrink:0">🏰 <strong>ChrobryRPG</strong></div>
         <div class="hud-stats">
           <div class="pill" style="min-width:0; flex:1">
             <span>❤️</span>
@@ -32,6 +32,7 @@
         </div>
       </div>
       <div class="mobile-buttons">
+        <div class="pill">❤️ <span id="livesDisplay">3</span></div>
         <div class="pill">💰 <span id="gold">0</span></div>
         <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
       </div>
@@ -145,8 +146,8 @@
   <!-- Modal Woman Dialog -->
   <div class="modal" id="womanModal">
     <div class="panel">
-      <h1>👩 Kobieta</h1>
-      <p style="margin:12px 0">Aby spłodzić syna, musisz mi dać 50 jabłek i 50 mięsa.</p>
+      <h1>👩 Niewiasta</h1>
+      <p style="margin:12px 0">Hola! Chcesz mi spłodzić syna? Aby spłodzić mi syna luby, daj mnie 50 jabłek i 50 mięsiwa kochaniutki. Nie jestem taka łatwa! A! I pamiętaj ze jest 50/50 % szansa ze dropne Ci syna albo corke </p>
       <div class="row" style="margin:12px 0">
         <div class="pill">🍎 Jabłka: <span id="womanApples">0</span>/50</div>
         <div class="pill">🍖 Mięso: <span id="womanMeat">0</span>/50</div>
@@ -178,6 +179,21 @@
         <button class="btn" id="wizardCompleteBtn">📖 Napisz książkę</button>
         <button class="btn" id="closeWizardBtn">Zamknij</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Start Screen -->
+  <div class="modal" id="startScreenModal">
+    <div class="panel" style="text-align:center; max-width:500px;">
+      <h1 style="font-size:48px; margin-bottom:20px;">🏰 Chrobry RPG</h1>
+      <p style="font-size:18px; margin-bottom:30px; opacity:0.9;">
+        Walcz, zbieraj, rozwijaj się i przetrwaj w świecie pełnym niebezpieczeństw!
+      </p>
+      <div style="margin-bottom:30px;">
+        <div class="pill" style="margin-bottom:8px; display:inline-block;">❤️ Życia: <span id="startScreenLives">3</span></div>
+        <div class="pill" style="margin-bottom:8px; display:inline-block; margin-left:8px;">⭐ Poziom: <span id="startScreenLevel">1</span></div>
+      </div>
+      <button class="btn" id="startGameBtn" style="font-size:18px; padding:12px 24px;">Rozpocznij grę</button>
     </div>
   </div>
 
