@@ -59,10 +59,12 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   home: { x: 3000, y: 2800 } // Domek nad graczem na starcie
 };
 
-// Initialize missing stats for old saves
-if(state.meleeDamage === undefined) state.meleeDamage = 18;
-if(state.rangedDamage === undefined) state.rangedDamage = 16;
-if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
+  // Initialize missing stats for old saves
+  if(state.meleeDamage === undefined) state.meleeDamage = 18;
+  if(state.rangedDamage === undefined) state.rangedDamage = 16;
+  if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
+  if(state.inventory.wood === undefined) state.inventory.wood = 0;
+  if(state.interactionMode === undefined) state.interactionMode = false;
 
   // Initialize trees
   if(state.trees.length === 0) {
@@ -85,7 +87,7 @@ if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
       }
     }
   }
-
+  
 // === Collision radii ===
 const COLLIDE = { playerR: 20, enemyR: 18 };
 
@@ -186,6 +188,32 @@ let mousePos = {x:0, y:0};
 const cam = {x:state.pos.x, y:state.pos.y};
 function worldToScreen(wx, wy){ return { x: wx - cam.x + canvas.width/2, y: wy - cam.y + canvas.height/2 }; }
 function screenToWorld(sx, sy){ return { x: sx + cam.x - canvas.width/2, y: sy + cam.y - canvas.height/2 }; }
+
+// Define renderWithWrapAround after cam and functions are initialized
+renderWithWrapAround = function(x, y, renderFn, margin = 50) {
+  const marginX = margin;
+  const marginY = margin;
+  const viewLeft = cam.x - canvas.width/2 - marginX;
+  const viewRight = cam.x + canvas.width/2 + marginX;
+  const viewTop = cam.y - canvas.height/2 - marginY;
+  const viewBottom = cam.y + canvas.height/2 + marginY;
+  
+  // Calculate which copies to render
+  const startOffsetX = Math.floor((viewLeft - x) / state.world.width) * state.world.width;
+  const endOffsetX = Math.ceil((viewRight - x) / state.world.width) * state.world.width;
+  const startOffsetY = Math.floor((viewTop - y) / state.world.height) * state.world.height;
+  const endOffsetY = Math.ceil((viewBottom - y) / state.world.height) * state.world.height;
+  
+  // Render only visible copies
+  for(let ox = startOffsetX; ox <= endOffsetX; ox += state.world.width) {
+    for(let oy = startOffsetY; oy <= endOffsetY; oy += state.world.height) {
+      const s = worldToScreen(x + ox, y + oy);
+      if(s.x > -margin && s.x < canvas.width + margin && s.y > -margin && s.y < canvas.height + margin) {
+        renderFn(s);
+      }
+    }
+  }
+};
 
 canvas.addEventListener('pointerdown', (e)=>{ canvas.setPointerCapture(e.pointerId); pointer.active=true; pointer.id=e.pointerId; pointer.x=e.clientX; pointer.y=e.clientY; pointer.justTapped=true; });
 canvas.addEventListener('pointermove', (e)=>{ if(pointer.active&&e.pointerId===pointer.id){ pointer.x=e.clientX; pointer.y=e.clientY; } mousePos.x=e.clientX; mousePos.y=e.clientY; });
@@ -1538,7 +1566,9 @@ function draw(){
   // pickups - optimized rendering
   ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const p of state.pickups){ 
-    const emo = PICKUPS[p.kind].emoji;
+    const spec = PICKUPS[p.kind];
+    if(!spec) continue; // Skip if pickup kind doesn't exist
+    const emo = spec.emoji;
     renderWithWrapAround(p.x, p.y, (s) => {
       ctx.fillText(emo, s.x, s.y);
     });
@@ -1610,4 +1640,3 @@ function loop(){
 spawnInitial();
 requestAnimationFrame(loop);
 updateHUD();
-</script>
