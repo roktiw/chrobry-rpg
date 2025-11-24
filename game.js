@@ -859,8 +859,22 @@ function updateStats() {
   statsMeleeDmg.textContent = state.meleeDamage;
   statsRangedCD.textContent = Math.round(state.attack.cdRanged);
   statsRangedDmg.textContent = state.rangedDamage;
-  // Całkowity zasięg = poziom + wartość z karty postaci
-  statsMagnet.textContent = state.level + state.pickupMagnetRange + 'px (poziom: ' + state.level + ' + bonus: ' + state.pickupMagnetRange + ')';
+  
+  // Update HP/MP bars
+  const hpPercent = (state.hp / state.hpMax) * 100;
+  const mpPercent = (state.mp / state.mpMax) * 100;
+  const hpBar = document.getElementById('statsHPBar');
+  const mpBar = document.getElementById('statsMPBar');
+  if(hpBar) hpBar.style.width = `${hpPercent}%`;
+  if(mpBar) mpBar.style.width = `${mpPercent}%`;
+  
+  // Update magnet range
+  const totalMagnet = state.level + state.pickupMagnetRange;
+  statsMagnet.textContent = `${totalMagnet}px`;
+  const magnetDesc = document.getElementById('statsMagnetDesc');
+  if(magnetDesc) {
+    magnetDesc.textContent = `Poziom ${state.level} + bonus ${state.pickupMagnetRange}`;
+  }
 }
 
 function toggleStats(){

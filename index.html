@@ -330,23 +330,118 @@
     </div>
   </div>
 
-  <!-- Modal Character Stats -->
+  <!-- Modal Character Stats - Redesigned -->
   <div class="modal" id="statsModal">
-    <div class="panel">
+    <div class="panel stats-panel">
       <button class="modal-close" aria-label="Zamknij">×</button>
-      <h1>📊 Karta Postaci</h1>
-      <div style="margin-bottom:12px">
-        <div class="pill" style="margin-bottom:8px">❤️ HP: <span id="statsHP">0</span>/<span id="statsHPMax">0</span></div>
-        <div class="pill" style="margin-bottom:8px">🔷 Mana: <span id="statsMP">0</span>/<span id="statsMPMax">0</span></div>
-        <div class="pill" style="margin-bottom:8px">⭐ Poziom: <span id="statsLevel">1</span></div>
-        <div class="pill" style="margin-bottom:8px">🏃 Prędkość: <span id="statsSpeed">0</span></div>
-        <div class="pill" style="margin-bottom:8px">⚔️ CD Miecz: <span id="statsMeleeCD">0</span>ms</div>
-        <div class="pill" style="margin-bottom:8px">🗡️ Siła Miecz: <span id="statsMeleeDmg">0</span></div>
-        <div class="pill" style="margin-bottom:8px">🏹 CD Strzała: <span id="statsRangedCD">0</span>ms</div>
-        <div class="pill" style="margin-bottom:8px">💥 Siła Strzała: <span id="statsRangedDmg">0</span></div>
-        <div class="pill">🧲 Przyciąganie dropów: <span id="statsMagnet">0</span>px</div>
+      <div class="stats-header">
+        <h1>📊 Karta Postaci</h1>
+        <div class="stats-level-badge">
+          <span class="stats-level-icon">⭐</span>
+          <span class="stats-level-text">Poziom <span id="statsLevel">1</span></span>
+        </div>
       </div>
-      <button class="btn btn-secondary" id="closeStatsBtn">❌ Zamknij</button>
+      
+      <!-- Podstawowe statystyki -->
+      <div class="stats-section">
+        <h2 class="stats-section-title">❤️ Podstawowe</h2>
+        <div class="stats-grid">
+          <div class="stat-card stat-card-hp">
+            <div class="stat-card-header">
+              <span class="stat-icon">❤️</span>
+              <span class="stat-label">Zdrowie</span>
+            </div>
+            <div class="stat-value">
+              <span id="statsHP">0</span><span class="stat-separator">/</span><span id="statsHPMax">0</span>
+            </div>
+            <div class="stat-bar-container">
+              <div class="stat-bar stat-bar-hp" id="statsHPBar"></div>
+            </div>
+          </div>
+          
+          <div class="stat-card stat-card-mp">
+            <div class="stat-card-header">
+              <span class="stat-icon">🔷</span>
+              <span class="stat-label">Mana</span>
+            </div>
+            <div class="stat-value">
+              <span id="statsMP">0</span><span class="stat-separator">/</span><span id="statsMPMax">0</span>
+            </div>
+            <div class="stat-bar-container">
+              <div class="stat-bar stat-bar-mp" id="statsMPBar"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Statystyki walki -->
+      <div class="stats-section">
+        <h2 class="stats-section-title">⚔️ Walka</h2>
+        <div class="stats-grid">
+          <div class="stat-card stat-card-melee">
+            <div class="stat-card-header">
+              <span class="stat-icon">⚔️</span>
+              <span class="stat-label">Atak Wręcz</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-detail-item">
+                <span class="stat-detail-label">Siła:</span>
+                <span class="stat-detail-value" id="statsMeleeDmg">0</span>
+              </div>
+              <div class="stat-detail-item">
+                <span class="stat-detail-label">CD:</span>
+                <span class="stat-detail-value" id="statsMeleeCD">0</span><span class="stat-unit">ms</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="stat-card stat-card-ranged">
+            <div class="stat-card-header">
+              <span class="stat-icon">🏹</span>
+              <span class="stat-label">Atak Dystansowy</span>
+            </div>
+            <div class="stat-details">
+              <div class="stat-detail-item">
+                <span class="stat-detail-label">Siła:</span>
+                <span class="stat-detail-value" id="statsRangedDmg">0</span>
+              </div>
+              <div class="stat-detail-item">
+                <span class="stat-detail-label">CD:</span>
+                <span class="stat-detail-value" id="statsRangedCD">0</span><span class="stat-unit">ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Statystyki ruchu i specjalne -->
+      <div class="stats-section">
+        <h2 class="stats-section-title">🏃 Ruch & Specjalne</h2>
+        <div class="stats-grid stats-grid-single">
+          <div class="stat-card stat-card-speed">
+            <div class="stat-card-header">
+              <span class="stat-icon">🏃</span>
+              <span class="stat-label">Prędkość Ruchu</span>
+            </div>
+            <div class="stat-value-large">
+              <span id="statsSpeed">0</span>
+            </div>
+          </div>
+          
+          <div class="stat-card stat-card-magnet">
+            <div class="stat-card-header">
+              <span class="stat-icon">🧲</span>
+              <span class="stat-label">Przyciąganie Dropów</span>
+            </div>
+            <div class="stat-value-large">
+              <span id="statsMagnet">0px</span>
+            </div>
+            <div class="stat-description" id="statsMagnetDesc">Poziom + bonus</div>
+          </div>
+        </div>
+      </div>
+      
+      <button class="btn btn-secondary" id="closeStatsBtn" style="margin-top:24px;">❌ Zamknij</button>
     </div>
   </div>
 
