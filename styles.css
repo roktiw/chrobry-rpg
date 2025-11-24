@@ -54,9 +54,13 @@ header { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-cont
 @media (min-width: 768px) {
   .mobile-buttons { gap:12px; }
 }
-footer { padding: 6px 8px; background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0)); }
+footer { padding: 6px 8px; background: linear-gradient(0deg, rgba(0,0,0,.6), rgba(0,0,0,0)); display:flex; flex-direction:column; gap:8px; align-items:center; }
 @media (min-width: 768px) {
   footer { padding: 8px 12px; }
+}
+.footer-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; }
+@media (min-width: 768px) {
+  .footer-controls { gap:12px; }
 }
 /* Animacje konsumpcji */
 @keyframes consumeApple {

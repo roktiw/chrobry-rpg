@@ -46,8 +46,9 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   paused: false,
     // New: inventory and quests
     inventory: { apples: 0, meat: 0, seeds: 0, mead: 0, wood: 0 },
-  plantingMode: false, // Mode for planting trees
-  quests: { tree: false, son: false, book: false },
+    plantingMode: false, // Mode for planting trees
+    interactionMode: false, // Mode for interacting with NPCs
+    quests: { tree: false, son: false, book: false },
   // New: NPCs
   woman: { x: 3500, y: 3500, t: 0, givenApples: 0, givenMeat: 0 },
   // New: Children
@@ -214,6 +215,36 @@ canvas.addEventListener('click', (e)=>{
     return;
   }
   
+  // Interaction mode - check if clicking on NPCs
+  if(state.interactionMode) {
+    // Check woman
+    let dx = state.woman.x - w.x, dy = state.woman.y - w.y;
+    if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+    if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+    if(Math.hypot(dx, dy) < 50) {
+      state.paused = true;
+      updateWomanDialog();
+      womanModal.style.display = 'flex';
+      return;
+    }
+    
+    // Check wizard
+    dx = state.wizard.x - w.x;
+    dy = state.wizard.y - w.y;
+    if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+    if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+    if(Math.hypot(dx, dy) < 50) {
+      state.paused = true;
+      updateWizardDialog();
+      wizardModal.style.display = 'flex';
+      return;
+    }
+    
+    // If clicked but not on NPC, just exit interaction mode
+    toggleInteractionMode();
+    return;
+  }
+  
   // Check if clicking on seed pickup to collect
   let clickedSeed = null;
   for(let i = state.pickups.length - 1; i >= 0; i--) {
@@ -272,6 +303,15 @@ addEventListener('keydown', (e)=>{
   if(e.key.toLowerCase() === 'r') {
     e.preventDefault();
     toggleStats();
+  }
+  if(e.key.toLowerCase() === 'f') {
+    e.preventDefault();
+    toggleInteractionMode();
+  }
+  if(e.key === 'Escape') {
+    if(state.interactionMode) {
+      toggleInteractionMode();
+    }
   }
 });
 addEventListener('keyup', (e)=>{
@@ -540,6 +580,26 @@ document.getElementById('statsBtn').addEventListener('click', ()=>{
 document.getElementById('closeStatsBtn').addEventListener('click', ()=>{
   state.paused = false;
   statsModal.style.display = 'none';
+});
+
+// === Interaction Mode ===
+const interactBtn = document.getElementById('interactBtn');
+function toggleInteractionMode(){
+  state.interactionMode = !state.interactionMode;
+  if(state.interactionMode) {
+    interactBtn.style.background = 'rgba(76,222,128,0.3)';
+    interactBtn.style.borderColor = 'rgba(76,222,128,0.6)';
+    toast('💬 Tryb interakcji aktywny - kliknij na NPC');
+  } else {
+    interactBtn.style.background = '';
+    interactBtn.style.borderColor = '';
+    toast('💬 Tryb interakcji wyłączony');
+  }
+}
+
+// Interaction button in footer
+interactBtn.addEventListener('click', ()=>{
+  toggleInteractionMode();
 });
 
 // === Woman Dialog ===
