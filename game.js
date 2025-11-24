@@ -18,6 +18,14 @@ function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
 addEventListener('resize', resize, {passive:true});
 resize();
 
+// === Performance optimizations ===
+let lastHUDUpdate = 0;
+const HUD_UPDATE_INTERVAL = 100; // Update HUD every 100ms instead of every frame
+
+// Helper function to render object with wrap-around (optimized - only renders visible copies)
+// This function will be defined after state is initialized
+let renderWithWrapAround;
+
 // === Game state (single class: Chrobry) ===
 let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   pos: {x:3000, y:3000}, vel: {x:0, y:0}, facing: {x:1, y:0},
@@ -36,8 +44,8 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   enemyKnockback: {}, // Knockback dla przeciwników {enemyId: {x, y, t}}
   world: { width: 6000, height: 6000 },
   paused: false,
-  // New: inventory and quests
-  inventory: { apples: 0, meat: 0, seeds: 0, mead: 0 },
+    // New: inventory and quests
+    inventory: { apples: 0, meat: 0, seeds: 0, mead: 0, wood: 0 },
   plantingMode: false, // Mode for planting trees
   quests: { tree: false, son: false, book: false },
   // New: NPCs
@@ -55,27 +63,108 @@ if(state.meleeDamage === undefined) state.meleeDamage = 18;
 if(state.rangedDamage === undefined) state.rangedDamage = 16;
 if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
 
-// Initialize trees
-if(state.trees.length === 0) {
-  for(let i = 0; i < 60; i++) {
-    state.trees.push({
-      x: rand(0, state.world.width),
-      y: rand(0, state.world.height),
-      lastDrop: 0,
-      id: Math.random().toString(36).slice(2)
-    });
+  // Initialize trees
+  if(state.trees.length === 0) {
+    for(let i = 0; i < 60; i++) {
+      state.trees.push({
+        x: rand(0, state.world.width),
+        y: rand(0, state.world.height),
+        lastDrop: 0,
+        hp: Math.round(rand(2, 3)), // 2-3 uderzenia
+        hpMax: Math.round(rand(2, 3)),
+        id: Math.random().toString(36).slice(2)
+      });
+    }
+  } else {
+    // Initialize HP for existing trees (for old saves)
+    for(const tree of state.trees) {
+      if(tree.hp === undefined) {
+        tree.hp = Math.round(rand(2, 3));
+        tree.hpMax = tree.hp;
+      }
+    }
   }
-}
 
 // === Collision radii ===
 const COLLIDE = { playerR: 20, enemyR: 18 };
 
 // Enemies & pickups
+// === Enemy Definitions ===
+// Każdy przeciwnik ma:
+// - dropCount: [min, max] - ile przedmiotów może dropnąć (słaby: 1-2, średni: 2-3, mocny: 3-5)
+// - drops: lista możliwych dropów z szansą (chance: 0.0-1.0) i wartością
+// Aby dodać nowy typ dropu:
+// 1. Dodaj nowy typ do PICKUPS (jeśli nie istnieje)
+// 2. Dodaj {kind:'nowyTyp', chance:0.X, value:Y} do listy drops odpowiedniego przeciwnika
 const ENEMIES = [
-  {name:'Wilk', emoji:'🐺', hp:30, atk:8, speed:1.6, range:20, dropGold:[1,5]},
-  {name:'Dzika świnia', emoji:'🐗', hp:40, atk:10, speed:1.4, range:16, dropGold:[1,6]},
-  {name:'Żmija', emoji:'🐍', hp:20, atk:6, speed:1.8, range:14, dropGold:[1,4]},
-  {name:'Trup', emoji:'🧟', hp:50, atk:12, speed:1.2, range:18, dropGold:[2,9]},
+  {
+    name:'Wilk', 
+    emoji:'🐺', 
+    hp:30, 
+    atk:8, 
+    speed:1.6, 
+    range:20, 
+    dropCount:[1,2], // Słaby - 1-2 dropy
+    drops:[
+      {kind:'xp', chance:1.0, value:[10,20]}, // Zawsze XP
+      {kind:'meat', chance:0.6, value:1},
+      {kind:'apple', chance:0.3, value:1},
+      {kind:'mead', chance:0.2, value:1},
+      {kind:'seed', chance:0.1, value:1},
+      {kind:'gold', chance:0.8, value:[1,5]}
+    ]
+  },
+  {
+    name:'Dzika świnia', 
+    emoji:'🐗', 
+    hp:40, 
+    atk:10, 
+    speed:1.4, 
+    range:16, 
+    dropCount:[2,3], // Średni - 2-3 dropy
+    drops:[
+      {kind:'xp', chance:1.0, value:[15,25]}, // Zawsze XP
+      {kind:'meat', chance:0.7, value:1},
+      {kind:'apple', chance:0.4, value:1},
+      {kind:'mead', chance:0.3, value:1},
+      {kind:'seed', chance:0.15, value:1},
+      {kind:'gold', chance:0.9, value:[1,6]}
+    ]
+  },
+  {
+    name:'Żmija', 
+    emoji:'🐍', 
+    hp:20, 
+    atk:6, 
+    speed:1.8, 
+    range:14, 
+    dropCount:[1,2], // Słaby - 1-2 dropy
+    drops:[
+      {kind:'xp', chance:1.0, value:[8,15]}, // Zawsze XP
+      {kind:'meat', chance:0.5, value:1},
+      {kind:'apple', chance:0.25, value:1},
+      {kind:'mead', chance:0.15, value:1},
+      {kind:'seed', chance:0.08, value:1},
+      {kind:'gold', chance:0.7, value:[1,4]}
+    ]
+  },
+  {
+    name:'Trup', 
+    emoji:'🧟', 
+    hp:50, 
+    atk:12, 
+    speed:1.2, 
+    range:18, 
+    dropCount:[3,5], // Mocny - 3-5 dropów
+    drops:[
+      {kind:'xp', chance:1.0, value:[20,35]}, // Zawsze XP
+      {kind:'meat', chance:0.8, value:1},
+      {kind:'apple', chance:0.5, value:1},
+      {kind:'mead', chance:0.4, value:1},
+      {kind:'seed', chance:0.2, value:1},
+      {kind:'gold', chance:1.0, value:[2,9]} // Zawsze złoto
+    ]
+  },
 ];
 const PICKUPS = {
   meat: { emoji:'🍖', kind:'hp', value:[15,25] },
@@ -84,6 +173,7 @@ const PICKUPS = {
   xp:   { emoji:'✨', kind:'xp', value:[12,22] },
   apple: { emoji:'🍎', kind:'apple', value:1 },
   seed: { emoji:'🌱', kind:'seed', value:1 },
+  wood: { emoji:'🪵', kind:'wood', value:1 },
 };
 
 // XP requirement curve
@@ -198,31 +288,35 @@ const xpNum = document.getElementById('xpNum');
 const lvlNum = document.getElementById('lvlNum');
 const goldEl = document.getElementById('gold');
 
-function updateHUD(){
-  const hpPercent = (state.hp/state.hpMax)*100;
-  const mpPercent = (state.mp/state.mpMax)*100;
-  const need = xpReq(state.level);
-  const prog = clamp(state.xp/need, 0, 1);
-  const xpPercent = prog*100;
-  
-  // Animate bars only if not already animating
-  if(!state.barAnimations.hp) {
-    hpFill.style.width = `${hpPercent}%`;
+  function updateHUD(force = false){
+    const now = performance.now();
+    if(!force && now - lastHUDUpdate < HUD_UPDATE_INTERVAL) return;
+    lastHUDUpdate = now;
+    
+    const hpPercent = (state.hp/state.hpMax)*100;
+    const mpPercent = (state.mp/state.mpMax)*100;
+    const need = xpReq(state.level);
+    const prog = clamp(state.xp/need, 0, 1);
+    const xpPercent = prog*100;
+    
+    // Animate bars only if not already animating
+    if(!state.barAnimations.hp) {
+      hpFill.style.width = `${hpPercent}%`;
+    }
+    if(!state.barAnimations.mp) {
+      mpFill.style.width = `${mpPercent}%`;
+    }
+    if(!state.barAnimations.xp) {
+      xpFill.style.width = `${xpPercent}%`;
+    }
+    
+    hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
+    mpNum.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
+    xpNum.textContent = `${state.xp}/${need}`;
+    lvlNum.textContent = state.level;
+    goldEl.textContent = state.gold;
+    updateQuestLog();
   }
-  if(!state.barAnimations.mp) {
-    mpFill.style.width = `${mpPercent}%`;
-  }
-  if(!state.barAnimations.xp) {
-    xpFill.style.width = `${xpPercent}%`;
-  }
-  
-  hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
-  mpNum.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
-  xpNum.textContent = `${state.xp}/${need}`;
-  lvlNum.textContent = state.level;
-  goldEl.textContent = state.gold;
-  updateQuestLog();
-}
 
 function animateBar(barType, fromPercent, toPercent) {
   const bar = barType === 'hp' ? hpFill : (barType === 'mp' ? mpFill : xpFill);
@@ -582,6 +676,10 @@ function spawnEnemy(){
 }
 function spawnPickup(kind, x, y, value, direction){
   const spec = PICKUPS[kind];
+  if(!spec) {
+    console.warn(`Unknown pickup kind: ${kind}`);
+    return; // Don't spawn if kind doesn't exist
+  }
   // Check collision with existing pickups
   const pickupRadius = 20;
   let attempts = 0;
@@ -618,11 +716,25 @@ function spawnPickup(kind, x, y, value, direction){
     bounceCount = 0;
   }
   
+  // Use provided value, or generate from spec, or default to 1
+  let finalValue = value;
+  if(finalValue === undefined || finalValue === null) {
+    if(spec.value) {
+      if(Array.isArray(spec.value)) {
+        finalValue = Math.round(rand(spec.value[0], spec.value[1]));
+      } else {
+        finalValue = spec.value;
+      }
+    } else {
+      finalValue = 1;
+    }
+  }
+  
   state.pickups.push({ 
     kind, 
     x: finalX, 
     y: finalY, 
-    value: value ?? (spec.value? (Array.isArray(spec.value)? Math.round(rand(spec.value[0], spec.value[1])) : spec.value) : 1),
+    value: finalValue,
     vx, vy, // Physics velocity
     bouncing, // Is still bouncing
     bounceCount, // Number of bounces
@@ -674,14 +786,82 @@ function fireArrow(target){
 }
 
 function killEnemy(e){
-  // zawsze mięso + xp
-  const dropDir1 = {x: rand(-0.8, 0.8), y: -0.5};
-  const dropDir2 = {x: rand(-0.8, 0.8), y: -0.5};
-  const dropDir3 = {x: rand(-0.8, 0.8), y: -0.5};
-  spawnPickup('meat', e.x, e.y, undefined, dropDir1);
-  spawnPickup('xp', e.x, e.y, Math.round(rand(10,20)), dropDir2);
-  // trochę złota
-  spawnPickup('gold', e.x, e.y, Math.round(rand(e.dropGold[0], e.dropGold[1])), dropDir3);
+  // Znajdź bazową definicję przeciwnika
+  const enemyDef = ENEMIES.find(en => en.name === e.name || en.emoji === e.emoji);
+  if(!enemyDef) {
+    // Fallback dla starych przeciwników
+    const dropDir1 = {x: rand(-0.8, 0.8), y: -0.5};
+    const dropDir2 = {x: rand(-0.8, 0.8), y: -0.5};
+    spawnPickup('meat', e.x, e.y, undefined, dropDir1);
+    spawnPickup('xp', e.x, e.y, Math.round(rand(10,20)), dropDir2);
+    const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
+    setTimeout(spawnEnemy, 500);
+    return;
+  }
+  
+  // Losuj ile dropów
+  const dropCount = Math.round(rand(enemyDef.dropCount[0], enemyDef.dropCount[1]));
+  const droppedItems = [];
+  
+  // Zbierz wszystkie przedmioty które mają być dropnięte
+  for(const drop of enemyDef.drops) {
+    if(Math.random() < drop.chance) {
+      // Use drop.value if it's a number, otherwise use PICKUPS default value
+      let value = drop.value;
+      if(typeof value === 'number') {
+        // Use the number as-is (e.g., for apples, meat, seeds, mead count)
+        value = value;
+      } else if(Array.isArray(value)) {
+        // Use the range (e.g., for XP, gold)
+        value = Math.round(rand(value[0], value[1]));
+      } else {
+        // If no value specified, use PICKUPS default
+        const pickupSpec = PICKUPS[drop.kind];
+        if(pickupSpec && pickupSpec.value) {
+          if(Array.isArray(pickupSpec.value)) {
+            value = Math.round(rand(pickupSpec.value[0], pickupSpec.value[1]));
+          } else {
+            value = pickupSpec.value;
+          }
+        } else {
+          value = 1;
+        }
+      }
+      droppedItems.push({kind: drop.kind, value});
+    }
+  }
+  
+  // Jeśli nie ma żadnych dropów (nie powinno się zdarzyć, ale na wszelki wypadek)
+  if(droppedItems.length === 0) {
+    // Zawsze dropnij przynajmniej XP
+    droppedItems.push({kind: 'xp', value: Math.round(rand(10,20))});
+  }
+  
+  // Ogranicz liczbę dropów do dropCount, ale zawsze zostaw XP i gold jeśli są
+  const xpDrop = droppedItems.find(d => d.kind === 'xp');
+  const goldDrop = droppedItems.find(d => d.kind === 'gold');
+  const otherDrops = droppedItems.filter(d => d.kind !== 'xp' && d.kind !== 'gold');
+  
+  // Zawsze dropnij XP i gold (jeśli są)
+  const finalDrops = [];
+  if(xpDrop) finalDrops.push(xpDrop);
+  if(goldDrop) finalDrops.push(goldDrop);
+  
+  // Dodaj pozostałe dropy do limitu
+  const remainingSlots = Math.max(0, dropCount - finalDrops.length);
+  const shuffled = otherDrops.sort(() => Math.random() - 0.5);
+  finalDrops.push(...shuffled.slice(0, remainingSlots));
+  
+  // Spawnuj dropy z różnymi kierunkami
+  for(let i = 0; i < finalDrops.length; i++) {
+    const angle = (i / finalDrops.length) * Math.PI * 2;
+    const dropDir = {
+      x: Math.cos(angle) * 0.8 + rand(-0.2, 0.2),
+      y: Math.sin(angle) * 0.8 - 0.5
+    };
+    spawnPickup(finalDrops[i].kind, e.x, e.y, finalDrops[i].value, dropDir);
+  }
+  
   // remove
   const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
   // kolejny przeciwnik za chwilę
@@ -1138,14 +1318,20 @@ function step(dt){
     }
   }
   
-  // enemies vs enemies
+  // enemies vs enemies (optimized - only check nearby enemies)
+  const enemyCollisionRadius = COLLIDE.enemyR * 4; // Only check enemies within this range
   for(let i=0;i<state.enemies.length;i++){
+    const a = state.enemies[i];
     for(let j=i+1;j<state.enemies.length;j++){
-      const a = state.enemies[i], b = state.enemies[j];
+      const b = state.enemies[j];
       let dx = b.x - a.x, dy = b.y - a.y;
       if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
       if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
       const d = Math.hypot(dx,dy);
+      
+      // Early exit if too far
+      if(d > enemyCollisionRadius) continue;
+      
       const minD = COLLIDE.enemyR*2;
       if(d>0 && d < minD){ 
         const nx = dx/d, ny = dy/d; 
@@ -1171,17 +1357,25 @@ function step(dt){
     pr.x = wrapped.x;
     pr.y = wrapped.y;
     pr.ttl-=dt;
+    
+    // Optimized collision - only check enemies within range
+    const projectileRange = 30; // Check enemies within this range
     for(const e of state.enemies){ 
       let dx = e.x - pr.x, dy = e.y - pr.y;
       if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
       if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-      if(Math.hypot(dx, dy) < 20){ 
+      const dist = Math.hypot(dx, dy);
+      
+      // Early exit if too far
+      if(dist > projectileRange) continue;
+      
+      if(dist < 20){ 
         e.hp -= pr.dmg; 
         floatingText(`-${pr.dmg}`, e.x, e.y, '#ff6a6a');
         
         // Knockback
-        const nx = dx / Math.hypot(dx, dy) || 0;
-        const ny = dy / Math.hypot(dx, dy) || 0;
+        const nx = dx / dist || 0;
+        const ny = dy / dist || 0;
         if(!state.enemyKnockback[e.id]) {
           state.enemyKnockback[e.id] = {x: 0, y: 0, t: 0};
         }
@@ -1265,112 +1459,65 @@ function draw(){
   }
   ctx.globalAlpha=1;
 
-  // Deciduous trees (background)
+  // Deciduous trees (background) - optimized rendering
   ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
   ctx.globalAlpha=0.85;
   for(const tree of state.trees) {
-    // Render multiple copies for wrap-around
-    for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-      for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-        const s = worldToScreen(tree.x + ox, tree.y + oy);
-        if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-          ctx.fillText('🌳', s.x, s.y);
-        }
-      }
-    }
+    renderWithWrapAround(tree.x, tree.y, (s) => {
+      ctx.fillText('🌳', s.x, s.y);
+    });
   }
   ctx.globalAlpha=1;
 
-  // Home
-  const homeScreen = worldToScreen(state.home.x, state.home.y);
-  // Render multiple copies for wrap-around
-  for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-    for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-      const s = worldToScreen(state.home.x + ox, state.home.y + oy);
-      if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-        ctx.font='36px "Apple Color Emoji", "Segoe UI Emoji"';
-        ctx.fillText('🏠', s.x, s.y);
-      }
-    }
-  }
+  // Home - optimized rendering
+  ctx.font='36px "Apple Color Emoji", "Segoe UI Emoji"';
+  renderWithWrapAround(state.home.x, state.home.y, (s) => {
+    ctx.fillText('🏠', s.x, s.y);
+  });
 
-  // pickups
+  // pickups - optimized rendering
   ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const p of state.pickups){ 
-    // Render multiple copies for wrap-around
-    for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-      for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-        const s=worldToScreen(p.x + ox, p.y + oy); 
-        if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-          const emo=PICKUPS[p.kind].emoji; 
-          ctx.fillText(emo, s.x, s.y); 
-        }
-      }
-    }
+    const emo = PICKUPS[p.kind].emoji;
+    renderWithWrapAround(p.x, p.y, (s) => {
+      ctx.fillText(emo, s.x, s.y);
+    });
   }
 
-  // enemies
+  // enemies - optimized rendering
   ctx.font='30px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const e of state.enemies){ 
-    // Render multiple copies for wrap-around
-    for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-      for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-        const s=worldToScreen(e.x + ox, e.y + oy); 
-        if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-          ctx.fillText(e.emoji, s.x, s.y); 
-        }
-      }
-    }
+    renderWithWrapAround(e.x, e.y, (s) => {
+      ctx.fillText(e.emoji, s.x, s.y);
+    });
   }
 
-  // Children
+  // Children - optimized rendering
   ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const child of state.children) {
-    // Render multiple copies for wrap-around
-    for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-      for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-        const s = worldToScreen(child.x + ox, child.y + oy);
-        if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-          ctx.fillText(child.emoji, s.x, s.y);
-        }
-      }
-    }
+    renderWithWrapAround(child.x, child.y, (s) => {
+      ctx.fillText(child.emoji, s.x, s.y);
+    });
   }
 
-  // Woman NPC
-  for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-    for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-      const s = worldToScreen(state.woman.x + ox, state.woman.y + oy);
-      if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-        ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
-        ctx.fillText('👩', s.x, s.y);
-      }
-    }
-  }
+  // Woman NPC - optimized rendering
+  ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
+  renderWithWrapAround(state.woman.x, state.woman.y, (s) => {
+    ctx.fillText('👩', s.x, s.y);
+  });
 
-  // Wizard NPC
-  for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-    for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-      const s = worldToScreen(state.wizard.x + ox, state.wizard.y + oy);
-      if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-        ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
-        ctx.fillText('🧙', s.x, s.y);
-      }
-    }
-  }
+  // Wizard NPC - optimized rendering
+  ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
+  renderWithWrapAround(state.wizard.x, state.wizard.y, (s) => {
+    ctx.fillText('🧙', s.x, s.y);
+  });
 
-  // projectiles
+  // projectiles - optimized rendering
+  ctx.font='24px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const pr of state.projectiles){ 
-    // Render multiple copies for wrap-around
-    for(let ox = -state.world.width; ox <= state.world.width; ox += state.world.width) {
-      for(let oy = -state.world.height; oy <= state.world.height; oy += state.world.height) {
-        const s=worldToScreen(pr.x + ox, pr.y + oy); 
-        if(s.x > -50 && s.x < canvas.width + 50 && s.y > -50 && s.y < canvas.height + 50) {
-          ctx.font='24px "Apple Color Emoji", "Segoe UI Emoji"'; 
-          ctx.fillText(pr.emoji, s.x, s.y); 
-        }
-      }
-    }
+    renderWithWrapAround(pr.x, pr.y, (s) => {
+      ctx.fillText(pr.emoji, s.x, s.y);
+    });
   }
 
   // player — mężczyzna z wąsami (używamy 🧔 jako styl moustache)
@@ -1389,7 +1536,15 @@ function draw(){
 
 // === Main ===
 let last=performance.now();
-function loop(){ const now=performance.now(); const dt=now-last; last=now; step(dt); draw(); updateHUD(); requestAnimationFrame(loop); }
+function loop(){ 
+  const now=performance.now(); 
+  const dt=Math.min(now-last, 50); // Cap dt to prevent huge jumps
+  last=now; 
+  step(dt); 
+  draw(); 
+  updateHUD(); // Now throttled internally
+  requestAnimationFrame(loop); 
+}
 
 // init
 spawnInitial();
