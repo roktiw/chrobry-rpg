@@ -9,68 +9,39 @@
 <body>
   <canvas id="canvas"></canvas>
   <div id="ui">
-    <!-- HUD - poziomy na mobile, pionowy na desktop -->
-    <div class="hud-container">
-      <!-- Mobile: poziomy kompaktowy HUD -->
-      <div class="hud-mobile">
-        <div class="hud-mobile-row">
-          <div class="hud-mobile-stat">
-            <div class="hud-mobile-label">❤️</div>
-            <div class="bar horizontal"><div id="hpFillMobile" style="width:100%"></div></div>
-            <div class="hud-mobile-value" id="hpNumMobile">0/0</div>
-          </div>
-          <div class="hud-mobile-stat">
-            <div class="hud-mobile-label">🔷</div>
-            <div class="bar blue horizontal"><div id="mpFillMobile" style="width:100%"></div></div>
-            <div class="hud-mobile-value" id="mpNumMobile">0/0</div>
-          </div>
-          <div class="hud-mobile-stat">
-            <div class="hud-mobile-label">⭐</div>
-            <div class="bar purple horizontal"><div id="xpFillMobile" style="width:0%"></div></div>
-            <div class="hud-mobile-value">L<span id="lvlNumMobile">1</span></div>
-          </div>
+    <!-- Pionowy HUD po lewej stronie -->
+    <div class="hud-vertical">
+      <div class="pill" style="margin-bottom:8px; text-align:center; font-weight:700;">🏰 <strong>Chrobry</strong></div>
+      
+      <div class="hud-stat-item">
+        <div class="hud-stat-header">
+          <span>❤️ HP</span>
+          <span id="hpNum" class="small">0/0</span>
         </div>
-        <div class="hud-mobile-row">
-          <div class="pill small">❤️ <span id="livesDisplayMobile">3</span></div>
-          <div class="pill small">💰 <span id="goldMobile">0</span></div>
-          <div class="pill btn-icon small" id="saveBtnMobile" title="Zapisz">💾</div>
-        </div>
+        <div class="bar vertical"><div id="hpFill" style="height:100%"></div></div>
       </div>
       
-      <!-- Desktop: pionowy HUD -->
-      <div class="hud-vertical">
-        <div class="pill" style="margin-bottom:8px; text-align:center; font-weight:700;">🏰 <strong>Chrobry</strong></div>
-        
-        <div class="hud-stat-item">
-          <div class="hud-stat-header">
-            <span>❤️ HP</span>
-            <span id="hpNum" class="small">0/0</span>
-          </div>
-          <div class="bar vertical"><div id="hpFill" style="height:100%"></div></div>
+      <div class="hud-stat-item">
+        <div class="hud-stat-header">
+          <span>🔷 MP</span>
+          <span id="mpNum" class="small">0/0</span>
         </div>
-        
-        <div class="hud-stat-item">
-          <div class="hud-stat-header">
-            <span>🔷 MP</span>
-            <span id="mpNum" class="small">0/0</span>
-          </div>
-          <div class="bar blue vertical"><div id="mpFill" style="height:100%"></div></div>
+        <div class="bar blue vertical"><div id="mpFill" style="height:100%"></div></div>
+      </div>
+      
+      <div class="hud-stat-item">
+        <div class="hud-stat-header">
+          <span>⭐ XP</span>
+          <span class="small">L<span id="lvlNum">1</span></span>
         </div>
-        
-        <div class="hud-stat-item">
-          <div class="hud-stat-header">
-            <span>⭐ XP</span>
-            <span class="small">L<span id="lvlNum">1</span></span>
-          </div>
-          <div class="bar purple vertical"><div id="xpFill" style="height:0%"></div></div>
-          <div class="small" style="text-align:center; margin-top:2px;" id="xpNum">0/100</div>
-        </div>
-        
-        <div class="hud-extra-info">
-          <div class="pill" style="margin-bottom:4px;">❤️ <span id="livesDisplay">3</span></div>
-          <div class="pill" style="margin-bottom:4px;">💰 <span id="gold">0</span></div>
-          <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
-        </div>
+        <div class="bar purple vertical"><div id="xpFill" style="height:0%"></div></div>
+        <div class="small" style="text-align:center; margin-top:2px;" id="xpNum">0/100</div>
+      </div>
+      
+      <div class="hud-extra-info">
+        <div class="pill" style="margin-bottom:4px;">❤️ <span id="livesDisplay">3</span></div>
+        <div class="pill" style="margin-bottom:4px;">💰 <span id="gold">0</span></div>
+        <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
       </div>
     </div>
     <footer>

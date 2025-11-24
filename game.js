@@ -423,7 +423,7 @@ const goldEl = document.getElementById('gold');
   const prog = clamp(state.xp/need, 0, 1);
   const xpPercent = prog*100;
   
-    // Desktop: pionowe paski (height)
+    // Animate bars only if not already animating (pionowe paski używają height zamiast width)
   if(!state.barAnimations.hp) {
       hpFill.style.height = `${hpPercent}%`;
   }
@@ -434,68 +434,26 @@ const goldEl = document.getElementById('gold');
       xpFill.style.height = `${xpPercent}%`;
   }
   
-  // Mobile: poziome paski (width)
-  const hpFillMobile = document.getElementById('hpFillMobile');
-  const mpFillMobile = document.getElementById('mpFillMobile');
-  const xpFillMobile = document.getElementById('xpFillMobile');
-  if(hpFillMobile && !state.barAnimations.hp) {
-    hpFillMobile.style.width = `${hpPercent}%`;
-  }
-  if(mpFillMobile && !state.barAnimations.mp) {
-    mpFillMobile.style.width = `${mpPercent}%`;
-  }
-  if(xpFillMobile && !state.barAnimations.xp) {
-    xpFillMobile.style.width = `${xpPercent}%`;
-  }
-  
-  // Desktop values
   hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
   mpNum.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
   xpNum.textContent = `${state.xp}/${need}`;
   lvlNum.textContent = state.level;
   goldEl.textContent = state.gold;
-  
-  // Mobile values
-  const hpNumMobile = document.getElementById('hpNumMobile');
-  const mpNumMobile = document.getElementById('mpNumMobile');
-  const lvlNumMobile = document.getElementById('lvlNumMobile');
-  const goldMobile = document.getElementById('goldMobile');
-  const livesDisplayMobile = document.getElementById('livesDisplayMobile');
-  if(hpNumMobile) hpNumMobile.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
-  if(mpNumMobile) mpNumMobile.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
-  if(lvlNumMobile) lvlNumMobile.textContent = state.level;
-  if(goldMobile) goldMobile.textContent = state.gold;
-  if(livesDisplayMobile) livesDisplayMobile.textContent = state.lives;
-  
-  // Desktop lives
     const livesDisplay = document.getElementById('livesDisplay');
     if(livesDisplay) livesDisplay.textContent = state.lives;
   updateQuestLog();
 }
 
 function animateBar(barType, fromPercent, toPercent) {
-  // Desktop bars (vertical)
   const bar = barType === 'hp' ? hpFill : (barType === 'mp' ? mpFill : xpFill);
   const barContainer = barType === 'hp' ? hpFill.parentElement : (barType === 'mp' ? mpFill.parentElement : xpFill.parentElement);
   
-  // Mobile bars (horizontal)
-  const barMobile = barType === 'hp' ? document.getElementById('hpFillMobile') : 
-                    (barType === 'mp' ? document.getElementById('mpFillMobile') : document.getElementById('xpFillMobile'));
-  const barContainerMobile = barMobile ? barMobile.parentElement.parentElement : null;
-  
   state.barAnimations[barType] = true;
-  if(barContainer) barContainer.classList.add('bar-animating');
-  if(barContainerMobile) barContainerMobile.classList.add('bar-animating');
+  barContainer.classList.add('bar-animating');
   
-  // Desktop: vertical bars (height)
+  // Set start height (pionowe paski)
   bar.style.height = `${fromPercent}%`;
   bar.style.transition = 'height 0.4s ease-out';
-  
-  // Mobile: horizontal bars (width)
-  if(barMobile) {
-    barMobile.style.width = `${fromPercent}%`;
-    barMobile.style.transition = 'width 0.4s ease-out';
-  }
   
   // Force reflow
   bar.offsetHeight;
@@ -503,13 +461,10 @@ function animateBar(barType, fromPercent, toPercent) {
   // Animate to target
   setTimeout(() => {
     bar.style.height = `${toPercent}%`;
-    if(barMobile) barMobile.style.width = `${toPercent}%`;
     setTimeout(() => {
       state.barAnimations[barType] = false;
-      if(barContainer) barContainer.classList.remove('bar-animating');
-      if(barContainerMobile) barContainerMobile.classList.remove('bar-animating');
+      barContainer.classList.remove('bar-animating');
       bar.style.transition = '';
-      if(barMobile) barMobile.style.transition = '';
     }, 400);
   }, 10);
 }
@@ -1319,10 +1274,6 @@ if(levelUpModalClose) {
 
 // === Save ===
 document.getElementById('saveBtn').addEventListener('click', ()=>{ localStorage.setItem('chrobry_save_v2', JSON.stringify(state)); toast('💾 Zapisano'); });
-const saveBtnMobile = document.getElementById('saveBtnMobile');
-if(saveBtnMobile) {
-  saveBtnMobile.addEventListener('click', ()=>{ localStorage.setItem('chrobry_save_v2', JSON.stringify(state)); toast('💾 Zapisano'); });
-}
 
 // === Toasts ===
 let toasts = [];
@@ -1712,41 +1663,12 @@ function step(dt){
       }
     } else {
       // Normal enemy AI (no nest)
-      // Dzik (🐗) - specjalna logika: zawsze szuka jabłek, zjada je, potem czeka przy drzewie
+      // Dzik (🐗) preferuje jabłka zamiast atakowania gracza
       if(e.emoji === '🐗') {
-        // Inicjalizuj właściwości dzika jeśli nie istnieją
-        if(e.eatingApple === undefined) e.eatingApple = null;
-        if(e.eatingTimer === undefined) e.eatingTimer = 0;
-        if(e.targetTree === undefined) e.targetTree = null;
-        if(e.waitingAngle === undefined) e.waitingAngle = 0;
-        
-        // Jeśli zjada jabłko, kontynuuj zjadanie
-        if(e.eatingApple && e.eatingTimer > 0) {
-          e.eatingTimer -= dt;
-          // Sprawdź czy jabłko nadal istnieje
-          const appleStillExists = state.pickups.find(p => p === e.eatingApple);
-          if(!appleStillExists) {
-            // Jabłko zniknęło (zostało zebrane), przerwij zjadanie
-            e.eatingApple = null;
-            e.eatingTimer = 0;
-          } else if(e.eatingTimer <= 0) {
-            // Zjadł jabłko - usuń je
-            const appleIdx = state.pickups.findIndex(p => p === e.eatingApple);
-            if(appleIdx >= 0) {
-              state.pickups.splice(appleIdx, 1);
-            }
-            e.eatingApple = null;
-            e.eatingTimer = 0;
-            e.targetTree = null; // Reset target tree, będzie szukał nowego
-          }
-          // Podczas zjadania nie ruszaj się
-          return;
-        }
-        
-        // Szukaj jabłek w całym zasięgu wzroku (nie tylko w promieniu ataku)
+        // Szukaj jabłek w promieniu ataku
         let nearestApple = null;
         let nearestAppleDist = Infinity;
-        const visionRange = 500; // Zasięg wzroku dzika
+        const attackRange = e.range || 20; // Promień ataku dzika
         
         for(const pickup of state.pickups) {
           if(pickup.kind === 'apple') {
@@ -1755,104 +1677,38 @@ function step(dt){
             if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
             const dApple = Math.hypot(dxApple, dyApple);
             
-            if(dApple < visionRange && dApple < nearestAppleDist) {
+            if(dApple < attackRange && dApple < nearestAppleDist) {
               nearestApple = pickup;
               nearestAppleDist = dApple;
             }
           }
         }
         
-        // Jeśli znalazł jabłko, idź do niego
+        // Jeśli znalazł jabłko w promieniu ataku, idź do niego zamiast do gracza
         if(nearestApple) {
           let dxApple = nearestApple.x - e.x, dyApple = nearestApple.y - e.y;
           if(Math.abs(dxApple) > state.world.width / 2) dxApple = dxApple > 0 ? dxApple - state.world.width : dxApple + state.world.width;
           if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
           const dApple = Math.hypot(dxApple, dyApple);
-          
-          // Jeśli dotknął jabłka, zacznij je zjadać
-          if(dApple < 25) { // Promień kolizji
-            e.eatingApple = nearestApple;
-            e.eatingTimer = 2000; // 2 sekundy
-            e.targetTree = null; // Reset target tree
-            return; // Zatrzymaj się
-          }
-          
-          // Idź do jabłka
           if(dApple > 0) {
             e.x += (dxApple/dApple) * e.speed;
             e.y += (dyApple/dApple) * e.speed;
           }
         } else {
-          // Brak jabłek - znajdź najbliższe drzewo i kręć się przy nim
-          if(!e.targetTree) {
-            // Szukaj najbliższego drzewa
-            let nearestTree = null;
-            let nearestTreeDist = Infinity;
-            
-            for(const tree of state.trees) {
-              let dxTree = tree.x - e.x, dyTree = tree.y - e.y;
-              if(Math.abs(dxTree) > state.world.width / 2) dxTree = dxTree > 0 ? dxTree - state.world.width : dxTree + state.world.width;
-              if(Math.abs(dyTree) > state.world.height / 2) dyTree = dyTree > 0 ? dyTree - state.world.height : dyTree + state.world.height;
-              const dTree = Math.hypot(dxTree, dyTree);
-              
-              if(dTree < nearestTreeDist) {
-                nearestTree = tree;
-                nearestTreeDist = dTree;
-              }
-            }
-            
-            if(nearestTree) {
-              e.targetTree = nearestTree;
-            }
+          // Brak jabłek w promieniu - normalne AI (atakuj gracza)
+          let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
+          if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+          if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+          const d = Math.hypot(dx,dy);
+          if(d<380){ 
+            e.x += (dx/d)*e.speed; 
+            e.y += (dy/d)*e.speed; 
           }
-          
-          // Jeśli ma target tree, idź do niego i kręć się wokół
-          if(e.targetTree) {
-            let dxTree = e.targetTree.x - e.x, dyTree = e.targetTree.y - e.y;
-            if(Math.abs(dxTree) > state.world.width / 2) dxTree = dxTree > 0 ? dxTree - state.world.width : dxTree + state.world.width;
-            if(Math.abs(dyTree) > state.world.height / 2) dyTree = dyTree > 0 ? dyTree - state.world.height : dyTree + state.world.height;
-            const dTree = Math.hypot(dxTree, dyTree);
-            
-            // Jeśli jest blisko drzewa, kręć się wokół niego
-            if(dTree < 100) {
-              e.waitingAngle += dt * 0.001; // Powolne kręcenie
-              const radius = 60; // Promień kręcenia
-              const targetX = e.targetTree.x + Math.cos(e.waitingAngle) * radius;
-              const targetY = e.targetTree.y + Math.sin(e.waitingAngle) * radius;
-              
-              let dxTarget = targetX - e.x, dyTarget = targetY - e.y;
-              if(Math.abs(dxTarget) > state.world.width / 2) dxTarget = dxTarget > 0 ? dxTarget - state.world.width : dxTarget + state.world.width;
-              if(Math.abs(dyTarget) > state.world.height / 2) dyTarget = dyTarget > 0 ? dyTarget - state.world.height : dyTarget + state.world.height;
-              const dTarget = Math.hypot(dxTarget, dyTarget);
-              
-              if(dTarget > 0) {
-                e.x += (dxTarget/dTarget) * e.speed * 0.5; // Wolniejsze kręcenie
-                e.y += (dyTarget/dTarget) * e.speed * 0.5;
-              }
-            } else {
-              // Idź do drzewa
-              if(dTree > 0) {
-                e.x += (dxTree/dTree) * e.speed;
-                e.y += (dyTree/dTree) * e.speed;
-              }
-            }
-          } else {
-            // Brak drzew - normalne AI (atakuj gracza)
-            let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
-            if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
-            if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-            const d = Math.hypot(dx,dy);
-            if(d<380){ 
-              e.x += (dx/d)*e.speed; 
-              e.y += (dy/d)*e.speed; 
-            }
-            else { 
-              e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
-              e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4;
-            }
+          else { 
+            e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
+            e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
           }
         }
-        return; // Zakończ AI dla dzika - nie wykonuj normalnego AI
       } else {
         // Normal enemy AI dla innych przeciwników
     // Handle wrap-around distance
