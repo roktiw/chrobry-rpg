@@ -3,40 +3,47 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>👨 ChrobryRPG</title>
+  <title>🧔 ChrobryRPG</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <canvas id="canvas"></canvas>
   <div id="ui">
-    <header>
-      <div class="hud-compact">
-        <div class="pill" style="flex-shrink:0">🏰 <strong>ChrobryRPG</strong></div>
-        <div class="hud-stats">
-          <div class="pill" style="min-width:0; flex:1">
-            <span>❤️</span>
-            <div class="bar" style="margin-left:4px; margin-right:4px"><div id="hpFill" style="width:100%"></div></div>
-            <span id="hpNum" class="small">0/0</span>
-          </div>
-          <div class="pill" style="min-width:0; flex:1">
-            <span>🔷</span>
-            <div class="bar blue" style="margin-left:4px; margin-right:4px"><div id="mpFill" style="width:100%"></div></div>
-            <span id="mpNum" class="small">0/0</span>
-          </div>
-          <div class="pill" style="min-width:0; flex:1">
-            <span>⭐</span>
-            <div class="bar purple" style="margin-left:4px; margin-right:4px"><div id="xpFill" style="width:0%"></div></div>
-            <span id="xpNum" class="small">0/100</span>
-            <span class="small" style="margin-left:4px">L<span id="lvlNum">1</span></span>
-          </div>
+    <!-- Pionowy HUD po lewej stronie -->
+    <div class="hud-vertical">
+      <div class="pill" style="margin-bottom:8px; text-align:center;">🏰 <strong>Chrobry</strong></div>
+      
+      <div class="hud-stat-item">
+        <div class="hud-stat-header">
+          <span>❤️ HP</span>
+          <span id="hpNum" class="small">0/0</span>
         </div>
+        <div class="bar vertical"><div id="hpFill" style="height:100%"></div></div>
       </div>
-      <div class="mobile-buttons">
-        <div class="pill">❤️ <span id="livesDisplay">3</span></div>
-        <div class="pill">💰 <span id="gold">0</span></div>
+      
+      <div class="hud-stat-item">
+        <div class="hud-stat-header">
+          <span>🔷 MP</span>
+          <span id="mpNum" class="small">0/0</span>
+        </div>
+        <div class="bar blue vertical"><div id="mpFill" style="height:100%"></div></div>
+      </div>
+      
+      <div class="hud-stat-item">
+        <div class="hud-stat-header">
+          <span>⭐ XP</span>
+          <span class="small">L<span id="lvlNum">1</span></span>
+        </div>
+        <div class="bar purple vertical"><div id="xpFill" style="height:0%"></div></div>
+        <div class="small" style="text-align:center; margin-top:2px;" id="xpNum">0/100</div>
+      </div>
+      
+      <div class="hud-extra-info">
+        <div class="pill" style="margin-bottom:4px;">❤️ <span id="livesDisplay">3</span></div>
+        <div class="pill" style="margin-bottom:4px;">💰 <span id="gold">0</span></div>
         <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
       </div>
-    </header>
+    </div>
     <footer>
       <div class="footer-controls">
         <div class="pill btn-icon" id="questBtn" title="Questy (Q)">📜</div>
@@ -44,8 +51,20 @@
         <div class="pill btn-icon" id="statsBtn" title="Statystyki (R)">📊</div>
         <div class="pill btn-icon" id="interactBtn" title="Interakcja (F)">💬</div>
       </div>
-      <div class="pill small">Sterowanie: WASD/Strzałki - ruch | Spacja - atak | Kliknięcie - strzał</div>
+      <div class="pill small" style="display:none;">Sterowanie: WASD/Strzałki - ruch | Spacja - atak | Kliknięcie - strzał</div>
     </footer>
+    
+    <!-- Gałka analogowa (lewy dolny róg) -->
+    <div class="virtual-joystick" id="joystick">
+      <div class="joystick-base"></div>
+      <div class="joystick-stick" id="joystickStick"></div>
+    </div>
+    
+    <!-- Przyciski akcji (prawy dolny róg) -->
+    <div class="action-buttons">
+      <button class="action-btn action-btn-b" id="actionBtnB" title="Atak projectile (B)">🏹</button>
+      <button class="action-btn action-btn-a" id="actionBtnA" title="Atak ręcz (A)">⚔️</button>
+    </div>
   </div>
 
   <!-- Modal level-up -->

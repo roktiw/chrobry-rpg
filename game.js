@@ -195,6 +195,17 @@ const xpReq = lvl => Math.floor(100 + (lvl-1)*(lvl-1)*35);
 let pointer = {active:false,id:null,x:0,y:0,justTapped:false};
 let mousePos = {x:0, y:0};
 const cam = {x:state.pos.x, y:state.pos.y};
+
+// Virtual joystick
+let joystick = {
+  active: false,
+  touchId: null,
+  baseX: 0,
+  baseY: 0,
+  stickX: 0,
+  stickY: 0,
+  maxDistance: 50 // Maksymalna odległość od środka
+};
 function worldToScreen(wx, wy){ return { x: wx - cam.x + canvas.width/2, y: wy - cam.y + canvas.height/2 }; }
 function screenToWorld(sx, sy){ return { x: sx + cam.x - canvas.width/2, y: sy + cam.y - canvas.height/2 }; }
 
@@ -376,15 +387,15 @@ const goldEl = document.getElementById('gold');
     const prog = clamp(state.xp/need, 0, 1);
     const xpPercent = prog*100;
     
-    // Animate bars only if not already animating
+    // Animate bars only if not already animating (pionowe paski używają height zamiast width)
     if(!state.barAnimations.hp) {
-      hpFill.style.width = `${hpPercent}%`;
+      hpFill.style.height = `${hpPercent}%`;
     }
     if(!state.barAnimations.mp) {
-      mpFill.style.width = `${mpPercent}%`;
+      mpFill.style.height = `${mpPercent}%`;
     }
     if(!state.barAnimations.xp) {
-      xpFill.style.width = `${xpPercent}%`;
+      xpFill.style.height = `${xpPercent}%`;
     }
     
     hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
@@ -404,16 +415,16 @@ function animateBar(barType, fromPercent, toPercent) {
   state.barAnimations[barType] = true;
   barContainer.classList.add('bar-animating');
   
-  // Set start width
-  bar.style.width = `${fromPercent}%`;
-  bar.style.transition = 'width 0.4s ease-out';
+  // Set start height (pionowe paski)
+  bar.style.height = `${fromPercent}%`;
+  bar.style.transition = 'height 0.4s ease-out';
   
   // Force reflow
   bar.offsetHeight;
   
   // Animate to target
   setTimeout(() => {
-    bar.style.width = `${toPercent}%`;
+    bar.style.height = `${toPercent}%`;
     setTimeout(() => {
       state.barAnimations[barType] = false;
       barContainer.classList.remove('bar-animating');
@@ -497,7 +508,7 @@ document.getElementById('invAppleClick').addEventListener('click', ()=>{
     const oldHP = state.hp;
     
     // Animation
-    btn.style.animation = 'consumeApple 0.6s ease-in-out';
+    btn.style.animation = 'consumeApple 0.25s ease-in-out';
     setTimeout(() => { btn.style.animation = ''; }, 600);
     
     state.inventory.apples--;
@@ -771,7 +782,7 @@ function spawnEnemy(){
   const ang = rand(0, Math.PI*2), dist = rand(400, 900);
   const ex = clamp(state.pos.x + Math.cos(ang)*dist, 0, state.world.width);
   const ey = clamp(state.pos.y + Math.sin(ang)*dist, 0, state.world.height);
-  state.enemies.push({ ...e, x:ex, y:ey, hp:e.hp, t:0, id:Math.random().toString(36).slice(2), nestId: null });
+  state.enemies.push({ ...e, x:ex, y:ey, hp:e.hp, hpMax:e.hp, t:0, id:Math.random().toString(36).slice(2), nestId: null });
 }
 
 function spawnEnemyFromNest(nest) {
@@ -789,9 +800,12 @@ function spawnEnemyFromNest(nest) {
     x: ex, 
     y: ey, 
     hp: enemyDef.hp, 
+    hpMax: enemyDef.hp, // Zapisz maxHP dla paska zdrowia
     t: 0, 
     id: Math.random().toString(36).slice(2),
-    nestId: nest.id // Link enemy to nest for guard behavior
+    nestId: nest.id, // Link enemy to nest for guard behavior
+    guardState: 'guarding', // 'guarding', 'chasing', 'flanking', 'attacking'
+    flankAngle: Math.random() * Math.PI * 2 // Losowy kąt do okrążania
   });
 }
 function spawnPickup(kind, x, y, value, direction){
@@ -1315,10 +1329,29 @@ function step(dt){
   // Trees drop apples
   for(const tree of state.trees) {
     tree.lastDrop += dt;
-    if(tree.lastDrop > 8000) { // drop every 8 seconds
+    if(tree.lastDrop > 10000) { // drop every 10 seconds
       tree.lastDrop = 0;
-      const dropDir = {x: rand(-0.5, 0.5), y: 1}; // Drop forward/down
-      spawnPickup('apple', tree.x, tree.y, undefined, dropDir);
+      
+      // Sprawdź ile jabłek jest już w promieniu wokół drzewa (max 7)
+      const appleRadius = 80; // Promień wokół drzewa
+      let appleCount = 0;
+      for(const pickup of state.pickups) {
+        if(pickup.kind === 'apple') {
+          let dx = pickup.x - tree.x, dy = pickup.y - tree.y;
+          if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+          if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+          const dist = Math.hypot(dx, dy);
+          if(dist < appleRadius) {
+            appleCount++;
+          }
+        }
+      }
+      
+      // Dropuj tylko jeśli jest mniej niż 7 jabłek w promieniu
+      if(appleCount < 7) {
+        const dropDir = {x: rand(-0.5, 0.5), y: 1}; // Drop forward/down
+        spawnPickup('apple', tree.x, tree.y, undefined, dropDir);
+      }
     }
   }
   
@@ -1388,66 +1421,183 @@ function step(dt){
   for(const e of state.enemies){
     e.t+=dt; 
     
-    // If enemy has nestId, guard the nest
+    // If enemy has nestId, guard the nest with improved AI
     if(e.nestId) {
       const nest = state.nests.find(n => n.id === e.nestId);
       if(nest) {
-        // Handle wrap-around distance to nest
-        let dx = nest.x - e.x, dy = nest.y - e.y;
-        if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
-        if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-        const distToNest = Math.hypot(dx, dy);
+        // Initialize guard state if not set
+        if(!e.guardState) e.guardState = 'guarding';
+        if(e.flankAngle === undefined) e.flankAngle = Math.random() * Math.PI * 2;
         
-        // If too far from nest, return to guard position
-        if(distToNest > nest.guardRadius) {
-          const returnSpeed = e.speed * 0.8; // Slightly slower when returning
-          e.x += (dx/distToNest) * returnSpeed;
-          e.y += (dy/distToNest) * returnSpeed;
-        } else {
-          // Guard behavior: patrol around nest or attack player if nearby
-          let dxPlayer = state.pos.x - e.x, dyPlayer = state.pos.y - e.y;
-          if(Math.abs(dxPlayer) > state.world.width / 2) dxPlayer = dxPlayer > 0 ? dxPlayer - state.world.width : dxPlayer + state.world.width;
-          if(Math.abs(dyPlayer) > state.world.height / 2) dyPlayer = dyPlayer > 0 ? dyPlayer - state.world.height : dyPlayer + state.world.height;
-          const dPlayer = Math.hypot(dxPlayer, dyPlayer);
-          
-          if(dPlayer < 380) {
-            // Attack player if in range
-            e.x += (dxPlayer/dPlayer) * e.speed;
-            e.y += (dyPlayer/dPlayer) * e.speed;
+        // Calculate distance to player
+        let dxPlayer = state.pos.x - e.x, dyPlayer = state.pos.y - e.y;
+        if(Math.abs(dxPlayer) > state.world.width / 2) dxPlayer = dxPlayer > 0 ? dxPlayer - state.world.width : dxPlayer + state.world.width;
+        if(Math.abs(dyPlayer) > state.world.height / 2) dyPlayer = dyPlayer > 0 ? dyPlayer - state.world.height : dyPlayer + state.world.height;
+        const dPlayer = Math.hypot(dxPlayer, dyPlayer);
+        
+        // Calculate distance to nest
+        let dxNest = nest.x - e.x, dyNest = nest.y - e.y;
+        if(Math.abs(dxNest) > state.world.width / 2) dxNest = dxNest > 0 ? dxNest - state.world.width : dxNest + state.world.width;
+        if(Math.abs(dyNest) > state.world.height / 2) dyNest = dyNest > 0 ? dyNest - state.world.height : dyNest + state.world.height;
+        const distToNest = Math.hypot(dxNest, dyNest);
+        
+        // State machine for guard behavior
+        if(e.guardState === 'guarding') {
+          // Guarding: patrol around nest, but if player is spotted, switch to chasing
+          if(dPlayer < 400) {
+            // Player spotted! Leave guard radius and chase
+            e.guardState = 'chasing';
+            // Rozproszenie: każdy przeciwnik idzie w nieco innym kierunku
+            e.flankAngle = Math.atan2(dyPlayer, dxPlayer) + (Math.random() - 0.5) * 0.8; // ±40 stopni rozproszenia
           } else {
-            // Patrol around nest
-            const patrolAngle = e.t * 0.001 + e.id.charCodeAt(0) * 0.1; // Unique angle per enemy
-            const patrolDist = nest.guardRadius * 0.6;
-            const targetX = nest.x + Math.cos(patrolAngle) * patrolDist;
-            const targetY = nest.y + Math.sin(patrolAngle) * patrolDist;
-            let dxPatrol = targetX - e.x, dyPatrol = targetY - e.y;
-            if(Math.abs(dxPatrol) > state.world.width / 2) dxPatrol = dxPatrol > 0 ? dxPatrol - state.world.width : dxPatrol + state.world.width;
-            if(Math.abs(dyPatrol) > state.world.height / 2) dyPatrol = dyPatrol > 0 ? dyPatrol - state.world.height : dyPatrol + state.world.height;
-            const dPatrol = Math.hypot(dxPatrol, dyPatrol);
-            if(dPatrol > 5) {
-              e.x += (dxPatrol/dPatrol) * e.speed * 0.5;
-              e.y += (dyPatrol/dPatrol) * e.speed * 0.5;
+            // Normal patrol
+            if(distToNest > nest.guardRadius) {
+              // Return to guard radius
+              e.x += (dxNest/distToNest) * e.speed * 0.8;
+              e.y += (dyNest/distToNest) * e.speed * 0.8;
+            } else {
+              // Patrol around nest
+              const patrolAngle = e.t * 0.001 + e.id.charCodeAt(0) * 0.1;
+              const patrolDist = nest.guardRadius * 0.6;
+              const targetX = nest.x + Math.cos(patrolAngle) * patrolDist;
+              const targetY = nest.y + Math.sin(patrolAngle) * patrolDist;
+              let dxPatrol = targetX - e.x, dyPatrol = targetY - e.y;
+              if(Math.abs(dxPatrol) > state.world.width / 2) dxPatrol = dxPatrol > 0 ? dxPatrol - state.world.width : dxPatrol + state.world.width;
+              if(Math.abs(dyPatrol) > state.world.height / 2) dyPatrol = dyPatrol > 0 ? dyPatrol - state.world.height : dyPatrol + state.world.height;
+              const dPatrol = Math.hypot(dxPatrol, dyPatrol);
+              if(dPatrol > 5) {
+                e.x += (dxPatrol/dPatrol) * e.speed * 0.5;
+                e.y += (dyPatrol/dPatrol) * e.speed * 0.5;
+              }
             }
+          }
+        } else if(e.guardState === 'chasing') {
+          // Chasing: leave guard radius and move towards player with spread
+          if(distToNest > nest.guardRadius * 1.2) {
+            // Left guard radius, switch to flanking
+            e.guardState = 'flanking';
+          } else {
+            // Move away from nest towards player with spread
+            const spreadDist = 80; // Odległość rozproszenia
+            const targetX = e.x + Math.cos(e.flankAngle) * spreadDist;
+            const targetY = e.y + Math.sin(e.flankAngle) * spreadDist;
+            let dxSpread = targetX - e.x, dySpread = targetY - e.y;
+            const dSpread = Math.hypot(dxSpread, dySpread);
+            if(dSpread > 0) {
+              e.x += (dxSpread/dSpread) * e.speed * 0.7;
+              e.y += (dySpread/dSpread) * e.speed * 0.7;
+            }
+            // Also move towards player
+            e.x += (dxPlayer/dPlayer) * e.speed * 0.3;
+            e.y += (dyPlayer/dPlayer) * e.speed * 0.3;
+          }
+        } else if(e.guardState === 'flanking') {
+          // Flanking: circle around player
+          const playerAngle = Math.atan2(dyPlayer, dxPlayer);
+          const flankDist = 150; // Odległość okrążania
+          const flankOffset = e.flankAngle; // Użyj zapisanego kątu dla każdego przeciwnika
+          
+          // Cel okrążania: pozycja obok gracza
+          const flankX = state.pos.x + Math.cos(playerAngle + flankOffset + Math.PI/2) * flankDist;
+          const flankY = state.pos.y + Math.sin(playerAngle + flankOffset + Math.PI/2) * flankDist;
+          
+          let dxFlank = flankX - e.x, dyFlank = flankY - e.y;
+          if(Math.abs(dxFlank) > state.world.width / 2) dxFlank = dxFlank > 0 ? dxFlank - state.world.width : dxFlank + state.world.width;
+          if(Math.abs(dyFlank) > state.world.height / 2) dyFlank = dyFlank > 0 ? dyFlank - state.world.height : dyFlank + state.world.height;
+          const dFlank = Math.hypot(dxFlank, dyFlank);
+          
+          if(dFlank > 30) {
+            // Still flanking
+            e.x += (dxFlank/dFlank) * e.speed * 0.8;
+            e.y += (dyFlank/dFlank) * e.speed * 0.8;
+          } else {
+            // Close enough, switch to attacking
+            e.guardState = 'attacking';
+          }
+          
+          // If player is very close, attack immediately
+          if(dPlayer < 100) {
+            e.guardState = 'attacking';
+          }
+        } else if(e.guardState === 'attacking') {
+          // Attacking: charge directly at player
+          e.x += (dxPlayer/dPlayer) * e.speed;
+          e.y += (dyPlayer/dPlayer) * e.speed;
+          
+          // If player moves far away, return to flanking
+          if(dPlayer > 250) {
+            e.guardState = 'flanking';
+            e.flankAngle = Math.atan2(dyPlayer, dxPlayer) + (Math.random() - 0.5) * 1.0;
           }
         }
       } else {
         // Nest destroyed, enemy becomes normal
         e.nestId = null;
+        e.guardState = null;
       }
     } else {
       // Normal enemy AI (no nest)
-      // Handle wrap-around distance
-      let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
-      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
-      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-      const d = Math.hypot(dx,dy);
-      if(d<380){ 
-        e.x += (dx/d)*e.speed; 
-        e.y += (dy/d)*e.speed; 
-      }
-      else { 
-        e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
-        e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+      // Dzik (🐗) preferuje jabłka zamiast atakowania gracza
+      if(e.emoji === '🐗') {
+        // Szukaj jabłek w promieniu ataku
+        let nearestApple = null;
+        let nearestAppleDist = Infinity;
+        const attackRange = e.range || 20; // Promień ataku dzika
+        
+        for(const pickup of state.pickups) {
+          if(pickup.kind === 'apple') {
+            let dxApple = pickup.x - e.x, dyApple = pickup.y - e.y;
+            if(Math.abs(dxApple) > state.world.width / 2) dxApple = dxApple > 0 ? dxApple - state.world.width : dxApple + state.world.width;
+            if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
+            const dApple = Math.hypot(dxApple, dyApple);
+            
+            if(dApple < attackRange && dApple < nearestAppleDist) {
+              nearestApple = pickup;
+              nearestAppleDist = dApple;
+            }
+          }
+        }
+        
+        // Jeśli znalazł jabłko w promieniu ataku, idź do niego zamiast do gracza
+        if(nearestApple) {
+          let dxApple = nearestApple.x - e.x, dyApple = nearestApple.y - e.y;
+          if(Math.abs(dxApple) > state.world.width / 2) dxApple = dxApple > 0 ? dxApple - state.world.width : dxApple + state.world.width;
+          if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
+          const dApple = Math.hypot(dxApple, dyApple);
+          if(dApple > 0) {
+            e.x += (dxApple/dApple) * e.speed;
+            e.y += (dyApple/dApple) * e.speed;
+          }
+        } else {
+          // Brak jabłek w promieniu - normalne AI (atakuj gracza)
+          let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
+          if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+          if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+          const d = Math.hypot(dx,dy);
+          if(d<380){ 
+            e.x += (dx/d)*e.speed; 
+            e.y += (dy/d)*e.speed; 
+          }
+          else { 
+            e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
+            e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+          }
+        }
+      } else {
+        // Normal enemy AI dla innych przeciwników
+        // Handle wrap-around distance
+        let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
+        if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+        if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+        const d = Math.hypot(dx,dy);
+        if(d<380){ 
+          e.x += (dx/d)*e.speed; 
+          e.y += (dy/d)*e.speed; 
+        }
+        else { 
+          e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
+          e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+        }
       }
     }
     
@@ -1796,6 +1946,16 @@ function draw(){
   ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const nest of state.nests) {
     renderWithWrapAround(nest.x, nest.y, (s) => {
+      // Kamień pod legowiskiem (2.5x większy)
+      ctx.save();
+      ctx.font='75px "Apple Color Emoji", "Segoe UI Emoji"'; // 30px * 2.5 = 75px
+      ctx.globalAlpha = 0.8;
+      ctx.fillText('🪨', s.x, s.y + 20); // Przesunięty w dół
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      
+      // Emoji legowiska (zwierzę)
+      ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
       const enemyDef = ENEMIES[nest.type];
       if(enemyDef) {
         // Show animal emoji (e.g., 🐺 for wolf nest, 🐗 for boar nest, etc.)
@@ -1803,15 +1963,15 @@ function draw(){
       } else {
         ctx.fillText('🏰', s.x, s.y); // Fallback
       }
-      // Show HP bar if in interaction mode
-      if(state.interactionMode) {
-        const hpPercent = nest.hp / nest.hpMax;
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(s.x - 20, s.y - 40, 40, 6);
-        ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
-        ctx.fillRect(s.x - 20, s.y - 40, 40 * hpPercent, 6);
-        ctx.fillStyle = '#e6e6e6';
-      }
+      // Show HP bar (zawsze widoczny)
+      const hpPercent = nest.hp / nest.hpMax;
+      const barWidth = 50;
+      const barHeight = 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - barWidth/2, s.y - 50, barWidth, barHeight);
+      ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
+      ctx.fillRect(s.x - barWidth/2, s.y - 50, barWidth * hpPercent, barHeight);
+      ctx.fillStyle = '#e6e6e6';
     });
   }
 
@@ -1831,6 +1991,22 @@ function draw(){
   for(const e of state.enemies){ 
     renderWithWrapAround(e.x, e.y, (s) => {
       ctx.fillText(e.emoji, s.x, s.y);
+      // Show HP bar (zawsze widoczny)
+      // Znajdź maxHP z ENEMIES na podstawie emoji lub użyj zapisanego hpMax
+      let maxHP = e.hpMax || e.hp;
+      if(!e.hpMax) {
+        // Jeśli nie ma hpMax, znajdź w ENEMIES
+        const enemyDef = ENEMIES.find(en => en.emoji === e.emoji);
+        if(enemyDef) maxHP = enemyDef.hp;
+      }
+      const hpPercent = e.hp / maxHP;
+      const barWidth = 30;
+      const barHeight = 4;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(s.x - barWidth/2, s.y - 25, barWidth, barHeight);
+      ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
+      ctx.fillRect(s.x - barWidth/2, s.y - 25, barWidth * hpPercent, barHeight);
+      ctx.fillStyle = '#e6e6e6';
     });
   }
 
@@ -1915,6 +2091,114 @@ if(startGameBtn) {
 
 // Show start screen on game load
 showStartScreen();
+
+// === Virtual Joystick ===
+const joystickEl = document.getElementById('joystick');
+const joystickStick = document.getElementById('joystickStick');
+const actionBtnA = document.getElementById('actionBtnA');
+const actionBtnB = document.getElementById('actionBtnB');
+
+if(joystickEl && joystickStick) {
+  function updateJoystickBase() {
+    const rect = joystickEl.getBoundingClientRect();
+    joystick.baseX = rect.left + rect.width / 2;
+    joystick.baseY = rect.top + rect.height / 2;
+  }
+  updateJoystickBase();
+  window.addEventListener('resize', updateJoystickBase);
+  
+  function updateJoystickPosition(clientX, clientY) {
+    const dx = clientX - joystick.baseX;
+    const dy = clientY - joystick.baseY;
+    const distance = Math.hypot(dx, dy);
+    
+    if(distance > joystick.maxDistance) {
+      const angle = Math.atan2(dy, dx);
+      joystick.stickX = Math.cos(angle) * joystick.maxDistance;
+      joystick.stickY = Math.sin(angle) * joystick.maxDistance;
+    } else {
+      joystick.stickX = dx;
+      joystick.stickY = dy;
+    }
+    
+    joystickStick.style.transform = `translate(calc(-50% + ${joystick.stickX}px), calc(-50% + ${joystick.stickY}px))`;
+    
+    // Normalizuj do -1..1
+    const normalizedX = joystick.stickX / joystick.maxDistance;
+    const normalizedY = joystick.stickY / joystick.maxDistance;
+    
+    // Ustaw klawisze wirtualne
+    keys['arrowleft'] = normalizedX < -0.3;
+    keys['arrowright'] = normalizedX > 0.3;
+    keys['arrowup'] = normalizedY < -0.3;
+    keys['arrowdown'] = normalizedY > 0.3;
+  }
+  
+  function resetJoystick() {
+    joystick.active = false;
+    joystick.touchId = null;
+    joystick.stickX = 0;
+    joystick.stickY = 0;
+    joystickStick.style.transform = 'translate(-50%, -50%)';
+    keys['arrowleft'] = false;
+    keys['arrowright'] = false;
+    keys['arrowup'] = false;
+    keys['arrowdown'] = false;
+  }
+  
+  joystickEl.addEventListener('touchstart', (e) => {
+    if(joystick.active) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    joystick.active = true;
+    joystick.touchId = touch.identifier;
+    updateJoystickPosition(touch.clientX, touch.clientY);
+  });
+  
+  joystickEl.addEventListener('touchmove', (e) => {
+    if(!joystick.active) return;
+    e.preventDefault();
+    const touch = Array.from(e.touches).find(t => t.identifier === joystick.touchId);
+    if(touch) {
+      updateJoystickPosition(touch.clientX, touch.clientY);
+    }
+  });
+  
+  joystickEl.addEventListener('touchend', (e) => {
+    if(!joystick.active) return;
+    const touch = Array.from(e.changedTouches).find(t => t.identifier === joystick.touchId);
+    if(touch) {
+      resetJoystick();
+    }
+  });
+  
+  joystickEl.addEventListener('touchcancel', () => {
+    resetJoystick();
+  });
+}
+
+// === Action Buttons ===
+if(actionBtnA) {
+  actionBtnA.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startMeleeSpin();
+  });
+  actionBtnA.addEventListener('click', () => {
+    startMeleeSpin();
+  });
+}
+
+if(actionBtnB) {
+  actionBtnB.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const w = screenToWorld(canvas.width / 2, canvas.height / 2);
+    fireArrow(null);
+  });
+  actionBtnB.addEventListener('click', () => {
+    const w = screenToWorld(canvas.width / 2, canvas.height / 2);
+    fireArrow(null);
+  });
+}
 
 // init
 spawnInitial();
