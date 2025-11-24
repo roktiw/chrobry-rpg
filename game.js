@@ -110,7 +110,8 @@ const PLAYER_REACTIONS = {
   pickup: ['😊', '😄', '😃', '🙂', '😁', '😋', '😍', '🤩', '😎', '😉'],
   killEnemy: ['💪', '😤', '😏', '😈', '🔥', '⚡', '🎯', '💥', '😎', '😄'],
   nearWoman: ['😳', '😍', '😊', '😘', '😉', '😏', '😋', '🤤', '😎', '😄'],
-  nearWizard: ['🤔', '😊', '🙂', '😃', '😄', '😎', '😉', '🤝', '😋', '😍']
+  nearWizard: ['🤔', '😊', '🙂', '😃', '😄', '😎', '😉', '🤝', '😋', '😍'],
+  takeDamage: ['😢', '😰', '😓', '😞', '😟', '😔', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😤']
 };
 
 // Funkcja do wywołania reakcji gracza
@@ -207,8 +208,8 @@ const PICKUPS = {
   wood: { emoji:'🪵', kind:'wood', value:1 },
 };
 
-// XP requirement curve
-const xpReq = lvl => Math.floor(100 + (lvl-1)*(lvl-1)*35);
+// XP requirement curve - zmniejszone wymagania dla łatwiejszego osiągnięcia wyższych poziomów
+const xpReq = lvl => Math.floor(50 + (lvl-1)*(lvl-1)*8);
 
 // === Input ===
 let pointer = {active:false,id:null,x:0,y:0,justTapped:false};
@@ -444,13 +445,13 @@ const goldEl = document.getElementById('gold');
   
     // Animate bars only if not already animating (pionowe paski używają height zamiast width)
   if(!state.barAnimations.hp) {
-      hpFill.style.height = `${hpPercent}%`;
+      hpFill.style.width = `${hpPercent}%`;
   }
   if(!state.barAnimations.mp) {
-      mpFill.style.height = `${mpPercent}%`;
+      mpFill.style.width = `${mpPercent}%`;
   }
   if(!state.barAnimations.xp) {
-      xpFill.style.height = `${xpPercent}%`;
+      xpFill.style.width = `${xpPercent}%`;
   }
   
   hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
@@ -470,16 +471,16 @@ function animateBar(barType, fromPercent, toPercent) {
   state.barAnimations[barType] = true;
   barContainer.classList.add('bar-animating');
   
-  // Set start height (pionowe paski)
-  bar.style.height = `${fromPercent}%`;
-  bar.style.transition = 'height 0.4s ease-out';
+  // Set start width (poziome paski)
+  bar.style.width = `${fromPercent}%`;
+  bar.style.transition = 'width 0.4s ease-out';
   
   // Force reflow
   bar.offsetHeight;
   
   // Animate to target
   setTimeout(() => {
-    bar.style.height = `${toPercent}%`;
+    bar.style.width = `${toPercent}%`;
     setTimeout(() => {
       state.barAnimations[barType] = false;
       barContainer.classList.remove('bar-animating');
@@ -1905,6 +1906,12 @@ function step(dt){
     if(d <= attackRange && currentTime - state.lastHitTime > 800) { // 800ms cooldown between hits
       const oldHP = state.hp;
       state.hp = clamp(state.hp - e.atk, 0, state.hpMax);
+      
+      // Reakcja na utratę zdrowia (tylko jeśli HP faktycznie spadło)
+      if(state.hp < oldHP) {
+        triggerPlayerReaction('takeDamage');
+      }
+      
       animateBar('hp', (oldHP/state.hpMax)*100, (state.hp/state.hpMax)*100);
       floatingText(`-${e.atk}`, state.pos.x, state.pos.y, '#ffb3b3');
       state.lastHitTime = currentTime;

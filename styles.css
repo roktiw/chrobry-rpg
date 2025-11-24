@@ -25,38 +25,27 @@ header { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-cont
   header { padding: 8px 12px; gap:12px; }
   .pill { padding:8px 12px; font-size:14px; }
 }
-.bar { height:8px; width:80px; background: rgba(255,255,255,.12); border-radius:999px; overflow:hidden; border:1px solid rgba(255,255,255,.15); flex-shrink:0; }
-.bar.vertical { height:80px; width:12px; border-radius:999px; position: relative; }
+.bar { height:8px; width:120px; background: rgba(255,255,255,.12); border-radius:999px; overflow:hidden; border:1px solid rgba(255,255,255,.15); flex-shrink:0; position: relative; }
 @media (min-width: 768px) {
-  .bar { height:10px; width:120px; }
-  .bar.vertical { height:100px; width:14px; }
+  .bar { height:10px; width:160px; }
 }
 @media (min-width: 1024px) {
-  .bar { width:160px; }
-  .bar.vertical { height:120px; width:16px; }
+  .bar { height:12px; width:200px; }
 }
-.bar > div { height:100%; width:50%; background: linear-gradient(90deg, rgba(255,0,64,.9), rgba(255,120,64,.9)); }
-.bar.vertical > div { 
-  width:100%; 
-  height:50%; 
+.bar > div { 
+  height:100%; 
+  width:50%; 
   position: absolute;
-  bottom: 0;
   left: 0;
-  background: linear-gradient(180deg, rgba(255,0,64,.9), rgba(255,120,64,.9)); 
+  top: 0;
+  background: linear-gradient(90deg, rgba(255,0,64,.9), rgba(255,120,64,.9)); 
+  transition: width 0.4s ease-out;
 }
-.bar.blue > div { background: linear-gradient(90deg, rgba(0,120,255,.9), rgba(0,220,255,.9)); }
-.bar.blue.vertical > div { 
-  background: linear-gradient(180deg, rgba(0,120,255,.9), rgba(0,220,255,.9)); 
-  position: absolute;
-  bottom: 0;
-  left: 0;
+.bar.blue > div { 
+  background: linear-gradient(90deg, rgba(0,120,255,.9), rgba(0,220,255,.9)); 
 }
-.bar.purple > div { background: linear-gradient(90deg, rgba(160,100,255,.95), rgba(120,200,255,.9)); }
-.bar.purple.vertical > div { 
-  background: linear-gradient(180deg, rgba(160,100,255,.95), rgba(120,200,255,.9)); 
-  position: absolute;
-  bottom: 0;
-  left: 0;
+.bar.purple > div { 
+  background: linear-gradient(90deg, rgba(160,100,255,.95), rgba(120,200,255,.9)); 
 }
 .hud { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
 @media (min-width: 768px) {
