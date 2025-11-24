@@ -9,39 +9,68 @@
 <body>
   <canvas id="canvas"></canvas>
   <div id="ui">
-    <!-- Pionowy HUD po lewej stronie -->
-    <div class="hud-vertical">
-      <div class="pill" style="margin-bottom:8px; text-align:center;">🏰 <strong>Chrobry</strong></div>
-      
-      <div class="hud-stat-item">
-        <div class="hud-stat-header">
-          <span>❤️ HP</span>
-          <span id="hpNum" class="small">0/0</span>
+    <!-- HUD - poziomy na mobile, pionowy na desktop -->
+    <div class="hud-container">
+      <!-- Mobile: poziomy kompaktowy HUD -->
+      <div class="hud-mobile">
+        <div class="hud-mobile-row">
+          <div class="hud-mobile-stat">
+            <div class="hud-mobile-label">❤️</div>
+            <div class="bar horizontal"><div id="hpFillMobile" style="width:100%"></div></div>
+            <div class="hud-mobile-value" id="hpNumMobile">0/0</div>
+          </div>
+          <div class="hud-mobile-stat">
+            <div class="hud-mobile-label">🔷</div>
+            <div class="bar blue horizontal"><div id="mpFillMobile" style="width:100%"></div></div>
+            <div class="hud-mobile-value" id="mpNumMobile">0/0</div>
+          </div>
+          <div class="hud-mobile-stat">
+            <div class="hud-mobile-label">⭐</div>
+            <div class="bar purple horizontal"><div id="xpFillMobile" style="width:0%"></div></div>
+            <div class="hud-mobile-value">L<span id="lvlNumMobile">1</span></div>
+          </div>
         </div>
-        <div class="bar vertical"><div id="hpFill" style="height:100%"></div></div>
+        <div class="hud-mobile-row">
+          <div class="pill small">❤️ <span id="livesDisplayMobile">3</span></div>
+          <div class="pill small">💰 <span id="goldMobile">0</span></div>
+          <div class="pill btn-icon small" id="saveBtnMobile" title="Zapisz">💾</div>
+        </div>
       </div>
       
-      <div class="hud-stat-item">
-        <div class="hud-stat-header">
-          <span>🔷 MP</span>
-          <span id="mpNum" class="small">0/0</span>
+      <!-- Desktop: pionowy HUD -->
+      <div class="hud-vertical">
+        <div class="pill" style="margin-bottom:8px; text-align:center; font-weight:700;">🏰 <strong>Chrobry</strong></div>
+        
+        <div class="hud-stat-item">
+          <div class="hud-stat-header">
+            <span>❤️ HP</span>
+            <span id="hpNum" class="small">0/0</span>
+          </div>
+          <div class="bar vertical"><div id="hpFill" style="height:100%"></div></div>
         </div>
-        <div class="bar blue vertical"><div id="mpFill" style="height:100%"></div></div>
-      </div>
-      
-      <div class="hud-stat-item">
-        <div class="hud-stat-header">
-          <span>⭐ XP</span>
-          <span class="small">L<span id="lvlNum">1</span></span>
+        
+        <div class="hud-stat-item">
+          <div class="hud-stat-header">
+            <span>🔷 MP</span>
+            <span id="mpNum" class="small">0/0</span>
+          </div>
+          <div class="bar blue vertical"><div id="mpFill" style="height:100%"></div></div>
         </div>
-        <div class="bar purple vertical"><div id="xpFill" style="height:0%"></div></div>
-        <div class="small" style="text-align:center; margin-top:2px;" id="xpNum">0/100</div>
-      </div>
-      
-      <div class="hud-extra-info">
-        <div class="pill" style="margin-bottom:4px;">❤️ <span id="livesDisplay">3</span></div>
-        <div class="pill" style="margin-bottom:4px;">💰 <span id="gold">0</span></div>
-        <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
+        
+        <div class="hud-stat-item">
+          <div class="hud-stat-header">
+            <span>⭐ XP</span>
+            <span class="small">L<span id="lvlNum">1</span></span>
+          </div>
+          <div class="bar purple vertical"><div id="xpFill" style="height:0%"></div></div>
+          <div class="small" style="text-align:center; margin-top:2px;" id="xpNum">0/100</div>
+        </div>
+        
+        <div class="hud-extra-info">
+          <div class="pill" style="margin-bottom:4px;">❤️ <span id="livesDisplay">3</span></div>
+          <div class="pill" style="margin-bottom:4px;">💰 <span id="gold">0</span></div>
+          <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
+        </div>
       </div>
     </div>
     <footer>
@@ -50,6 +79,7 @@
         <div class="pill btn-icon" id="inventoryBtn" title="Inventory (E)">🎒</div>
         <div class="pill btn-icon" id="statsBtn" title="Statystyki (R)">📊</div>
         <div class="pill btn-icon" id="interactBtn" title="Interakcja (F)">💬</div>
+        <div class="pill btn-icon" id="helpBtn" title="Pomoc (?)">❓</div>
       </div>
       <div class="pill small" style="display:none;">Sterowanie: WASD/Strzałki - ruch | Spacja - atak | Kliknięcie - strzał</div>
     </footer>
@@ -70,6 +100,7 @@
   <!-- Modal level-up -->
   <div class="modal" id="levelUpModal">
     <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
       <h1>🛡️ Awans na poziom <span id="lvlUpTo">2</span></h1>
       <div class="pill" style="margin-bottom:16px; font-size:16px; font-weight:bold; background:rgba(76,222,128,0.2); border-color:rgba(76,222,128,0.4);">
         ⭐ Punkty do wykorzystania: <span id="levelUpPoints">1</span>
@@ -110,19 +141,64 @@
   <!-- Modal Quest Log -->
   <div class="modal" id="questModal">
     <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
       <h1>📜 Quest Log</h1>
       <div style="margin-bottom:12px">
-        <div class="pill" style="margin-bottom:8px">
-          <strong>1. Zasadź drzewo</strong>
-          <span id="quest1Status" style="margin-left:8px; color:#4ade80">✓ Ukończone</span>
+        <!-- Quest 1: Zasadź drzewo -->
+        <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="font-size:16px;">1. Zasadź drzewo</strong>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="quest1Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
+              <button class="btn-icon-small" id="quest1Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+            </div>
+          </div>
+          <div id="quest1Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+            <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
+              🌳 Wędrując po świecie, zauważasz, że lasy są rzadkie. Zasadź swoje pierwsze drzewo, aby przywrócić naturze jej piękno. Zbierz nasiona z jabłek i użyj ich, aby zasadzić nowe drzewo na mapie.
+            </p>
+          </div>
         </div>
-        <div class="pill" style="margin-bottom:8px">
-          <strong>2. Spłodź syna</strong>
-          <span id="quest2Status" style="margin-left:8px; color:#4ade80">✓ Ukończone</span>
+        
+        <!-- Quest 2: Spłodź syna -->
+        <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="font-size:16px;">2. Spłodź syna</strong>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="quest2Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
+              <button class="btn-icon-small" id="quest2Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+            </div>
+          </div>
+          <div id="quest2Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+            <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
+              👩 Spotkaj niewiastę wędrującą po świecie. Aby spłodzić z nią potomka, musisz zdobyć 50 jabłek i 50 mięsa. Pamiętaj - jest 50% szansy, że urodzi się syn lub córka!
+            </p>
+            <div class="row" style="margin-top:8px; gap:8px;">
+              <div class="pill">🍎 Jabłka: <span id="quest2Apples">0</span>/50</div>
+              <div class="pill">🍖 Mięso: <span id="quest2Meat">0</span>/50</div>
+            </div>
+          </div>
         </div>
-        <div class="pill">
-          <strong>3. Napisz książkę</strong>
-          <span id="quest3Status" style="margin-left:8px; color:#4ade80">✓ Ukończone</span>
+        
+        <!-- Quest 3: Napisz książkę -->
+        <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="font-size:16px;">3. Napisz książkę</strong>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span id="quest3Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
+              <button class="btn-icon-small" id="quest3Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+            </div>
+          </div>
+          <div id="quest3Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+            <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
+              🧙 Spotkaj czarodzieja wędrującego po świecie. Aby napisać z nim książkę, musisz zebrać ogromne ilości zasobów: 100 mięsa, 100 jabłek i 100 monet. To będzie wymagało wiele wysiłku, ale nagroda jest warta poświęcenia!
+            </p>
+            <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+              <div class="pill">🍖 Mięso: <span id="quest3Meat">0</span>/100</div>
+              <div class="pill">🍎 Jabłka: <span id="quest3Apples">0</span>/100</div>
+              <div class="pill">💰 Monety: <span id="quest3Gold">0</span>/100</div>
+            </div>
+          </div>
         </div>
       </div>
       <button class="btn" id="closeQuestBtn">Zamknij</button>
@@ -132,6 +208,7 @@
   <!-- Modal Inventory -->
   <div class="modal" id="inventoryModal">
     <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
       <h1>🎒 Inventory</h1>
       <div style="margin-bottom:12px">
         <div class="pill" style="margin-bottom:8px; cursor:pointer" id="invAppleClick">🍎 Jabłka: <span id="invApples">0</span> (kliknij aby zjeść)</div>
@@ -147,6 +224,7 @@
   <!-- Modal Character Stats -->
   <div class="modal" id="statsModal">
     <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
       <h1>📊 Karta Postaci</h1>
       <div style="margin-bottom:12px">
         <div class="pill" style="margin-bottom:8px">❤️ HP: <span id="statsHP">0</span>/<span id="statsHPMax">0</span></div>
@@ -165,6 +243,7 @@
   <!-- Modal Woman Dialog -->
   <div class="modal" id="womanModal">
     <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
       <h1>👩 Niewiasta</h1>
       <p style="margin:12px 0">Hola! Chcesz mi spłodzić syna? Aby spłodzić mi syna luby, daj mnie 50 jabłek i 50 mięsiwa kochaniutki. Nie jestem taka łatwa! A! I pamiętaj ze jest 50/50 % szansa ze dropne Ci syna albo corke </p>
       <div class="row" style="margin:12px 0">
@@ -182,6 +261,7 @@
   <!-- Modal Wizard Dialog -->
   <div class="modal" id="wizardModal">
     <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
       <h1>🧙 Czarodziej</h1>
       <p style="margin:12px 0">Aby napisać książkę, potrzebuję 100 mięsa, 100 jabłek i 100 monet.</p>
       <div class="row" style="margin:12px 0">
@@ -204,6 +284,7 @@
   <!-- Modal Start Screen -->
   <div class="modal" id="startScreenModal">
     <div class="panel" style="text-align:center; max-width:500px;">
+      <button class="modal-close" aria-label="Zamknij" style="display:none;">×</button>
       <h1 style="font-size:48px; margin-bottom:20px;">🏰 Chrobry RPG</h1>
       <p style="font-size:18px; margin-bottom:30px; opacity:0.9;">
         Walcz, zbieraj, rozwijaj się i przetrwaj w świecie pełnym niebezpieczeństw!
@@ -212,7 +293,101 @@
         <div class="pill" style="margin-bottom:8px; display:inline-block;">❤️ Życia: <span id="startScreenLives">3</span></div>
         <div class="pill" style="margin-bottom:8px; display:inline-block; margin-left:8px;">⭐ Poziom: <span id="startScreenLevel">1</span></div>
       </div>
-      <button class="btn" id="startGameBtn" style="font-size:18px; padding:12px 24px;">Rozpocznij grę</button>
+      <div style="display:flex; flex-direction:column; gap:12px; align-items:stretch;">
+        <button class="btn" id="startGameBtn" style="font-size:18px; padding:12px 24px;">Rozpocznij grę</button>
+        <button class="btn" id="startScreenHelpBtn" style="font-size:16px; padding:10px 20px; background:rgba(100,150,255,.2); border-color:rgba(100,150,255,.4);">❓ Zasady gry</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Help / Zasady gry -->
+  <div class="modal" id="helpModal">
+    <div class="panel">
+      <button class="modal-close" aria-label="Zamknij">×</button>
+      <h1>❓ Zasady gry</h1>
+      
+      <div style="margin-bottom:20px;">
+        <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">📱 Sterowanie (Mobile)</h2>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>🎮 Gałka analogowa</strong> (lewy dolny róg) - poruszanie się
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>⚔️ Przycisk A</strong> (prawy dolny róg) - atak mieczem
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>🏹 Przycisk B</strong> (prawy dolny róg) - atak łukiem
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>📜 Questy</strong> - przycisk w górnym menu
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>🎒 Inventory</strong> - przycisk w górnym menu
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>📊 Statystyki</strong> - przycisk w górnym menu
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>💬 Interakcja</strong> - przycisk w górnym menu (aktywuj, potem kliknij NPC)
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">🖥️ Sterowanie (Desktop)</h2>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>WASD / Strzałki</strong> - poruszanie się
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>Spacja</strong> - atak mieczem
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>Kliknięcie myszką</strong> - atak łukiem w kierunku kursora
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>Q</strong> - Questy
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>E</strong> - Inventory
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>R</strong> - Statystyki
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>F</strong> - Tryb interakcji (potem kliknij NPC)
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>?</strong> - Pomoc (ten ekran)
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>ESC</strong> - Zamknij otwarte okno
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">🎮 Mechaniki gry</h2>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>🏰 Jaskinie</strong> - generują wrogów, dropują złoto i przedmioty po zniszczeniu
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>🌳 Drzewa</strong> - dropują jabłka, można je ścinać dla drewna
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>👩 Niewiasta</strong> - daj 50 jabłek i 50 mięsa aby spłodzić dziecko
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>🧙 Czarodziej</strong> - daj 100 mięsa, 100 jabłek i 100 monet aby napisać książkę
+          </div>
+          <div class="pill" style="text-align:left; padding:10px 14px;">
+            <strong>❤️ Życia</strong> - startujesz z 3, dostajesz +1 za każdy level up
+          </div>
+        </div>
+      </div>
+
+      <button class="btn" id="closeHelpBtn" style="width:100%; margin-top:8px;">Zamknij</button>
     </div>
   </div>
 

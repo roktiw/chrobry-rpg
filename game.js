@@ -45,11 +45,11 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   enemyKnockback: {}, // Knockback dla przeciwników {enemyId: {x, y, t}}
   world: { width: 6000, height: 6000 },
   paused: false,
-    // New: inventory and quests
+  // New: inventory and quests
     inventory: { apples: 0, meat: 0, seeds: 0, mead: 0, wood: 0 },
-    plantingMode: false, // Mode for planting trees
+  plantingMode: false, // Mode for planting trees
     interactionMode: false, // Mode for interacting with NPCs
-    quests: { tree: false, son: false, book: false },
+  quests: { tree: false, son: false, book: false },
     lastMinuteSpawn: 0, // Timer for periodic enemy spawning (every minute)
   // New: NPCs
   woman: { x: 3500, y: 3500, t: 0, givenApples: 0, givenMeat: 0 },
@@ -64,10 +64,10 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   nestRespawns: [] // Array of pending respawns: { type: enemyIndex, timer: 30000 }
 };
 
-  // Initialize missing stats for old saves
-  if(state.meleeDamage === undefined) state.meleeDamage = 18;
-  if(state.rangedDamage === undefined) state.rangedDamage = 16;
-  if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
+// Initialize missing stats for old saves
+if(state.meleeDamage === undefined) state.meleeDamage = 18;
+if(state.rangedDamage === undefined) state.rangedDamage = 16;
+if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
   if(state.inventory.wood === undefined) state.inventory.wood = 0;
   if(state.interactionMode === undefined) state.interactionMode = false;
   if(state.lastMinuteSpawn === undefined) state.lastMinuteSpawn = 0;
@@ -75,28 +75,32 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   if(state.nestRespawns === undefined) state.nestRespawns = [];
   if(state.lives === undefined) state.lives = 3;
 
-  // Initialize trees
-  if(state.trees.length === 0) {
-    for(let i = 0; i < 60; i++) {
-      state.trees.push({
-        x: rand(0, state.world.width),
-        y: rand(0, state.world.height),
-        lastDrop: 0,
+// Initialize trees
+if(state.trees.length === 0) {
+  for(let i = 0; i < 60; i++) {
+    state.trees.push({
+      x: rand(0, state.world.width),
+      y: rand(0, state.world.height),
+      lastDrop: 0,
         hp: Math.round(rand(2, 3)), // 2-3 uderzenia
         hpMax: Math.round(rand(2, 3)),
-        id: Math.random().toString(36).slice(2)
-      });
-    }
+      size: rand(2.2, 2.7), // Rozmiar od 2.2 do 2.7x standardowego emoji (30px)
+      id: Math.random().toString(36).slice(2)
+    });
+  }
   } else {
-    // Initialize HP for existing trees (for old saves)
+    // Initialize HP and size for existing trees (for old saves)
     for(const tree of state.trees) {
       if(tree.hp === undefined) {
         tree.hp = Math.round(rand(2, 3));
         tree.hpMax = tree.hp;
       }
+      if(tree.size === undefined) {
+        tree.size = rand(2.2, 2.7); // Dodaj rozmiar dla starych zapisów
+      }
     }
   }
-  
+
 // === Collision radii ===
 const COLLIDE = { playerR: 20, enemyR: 18 };
 
@@ -122,8 +126,7 @@ const ENEMIES = [
       {kind:'meat', chance:0.6, value:1},
       {kind:'apple', chance:0.3, value:1},
       {kind:'mead', chance:0.2, value:1},
-      {kind:'seed', chance:0.1, value:1},
-      {kind:'gold', chance:0.8, value:[1,5]}
+      {kind:'seed', chance:0.1, value:1}
     ]
   },
   {
@@ -139,8 +142,7 @@ const ENEMIES = [
       {kind:'meat', chance:0.7, value:1},
       {kind:'apple', chance:0.4, value:1},
       {kind:'mead', chance:0.3, value:1},
-      {kind:'seed', chance:0.15, value:1},
-      {kind:'gold', chance:0.9, value:[1,6]}
+      {kind:'seed', chance:0.15, value:1}
     ]
   },
   {
@@ -156,8 +158,7 @@ const ENEMIES = [
       {kind:'meat', chance:0.5, value:1},
       {kind:'apple', chance:0.25, value:1},
       {kind:'mead', chance:0.15, value:1},
-      {kind:'seed', chance:0.08, value:1},
-      {kind:'gold', chance:0.7, value:[1,4]}
+      {kind:'seed', chance:0.08, value:1}
     ]
   },
   {
@@ -173,8 +174,7 @@ const ENEMIES = [
       {kind:'meat', chance:0.8, value:1},
       {kind:'apple', chance:0.5, value:1},
       {kind:'mead', chance:0.4, value:1},
-      {kind:'seed', chance:0.2, value:1},
-      {kind:'gold', chance:1.0, value:[2,9]} // Zawsze złoto
+      {kind:'seed', chance:0.2, value:1}
     ]
   },
 ];
@@ -250,6 +250,9 @@ canvas.addEventListener('click', (e)=>{
       x: w.x,
       y: w.y,
       lastDrop: 0,
+      hp: Math.round(rand(2, 3)),
+      hpMax: Math.round(rand(2, 3)),
+      size: rand(2.2, 2.7), // Rozmiar od 2.2 do 2.7x standardowego emoji (30px)
       id: Math.random().toString(36).slice(2)
     });
     state.inventory.seeds--;
@@ -356,10 +359,43 @@ addEventListener('keydown', (e)=>{
     e.preventDefault();
     toggleInteractionMode();
   }
+  if(e.key === '?' || e.key === '/') {
+    e.preventDefault();
+    toggleHelp();
+  }
   if(e.key === 'Escape') {
+    e.preventDefault();
+    // Zamknij wszystkie modale
     if(state.interactionMode) {
       toggleInteractionMode();
     }
+    if(questModal && questModal.style.display === 'flex') {
+      questModal.style.display = 'none';
+      state.paused = false;
+    }
+    if(inventoryModal && inventoryModal.style.display === 'flex') {
+      inventoryModal.style.display = 'none';
+      state.paused = false;
+      state.plantingMode = false;
+    }
+    if(statsModal && statsModal.style.display === 'flex') {
+      statsModal.style.display = 'none';
+      state.paused = false;
+    }
+    if(womanModal && womanModal.style.display === 'flex') {
+      womanModal.style.display = 'none';
+      state.paused = false;
+    }
+    if(wizardModal && wizardModal.style.display === 'flex') {
+      wizardModal.style.display = 'none';
+      state.paused = false;
+    }
+    if(helpModal && helpModal.style.display === 'flex') {
+      helpModal.style.display = 'none';
+      state.paused = false;
+    }
+    // Level up modal nie zamyka się przez Escape (musi użyć punktów)
+    // Start screen nie zamyka się przez Escape
   }
 });
 addEventListener('keyup', (e)=>{
@@ -381,43 +417,85 @@ const goldEl = document.getElementById('gold');
     if(!force && now - lastHUDUpdate < HUD_UPDATE_INTERVAL) return;
     lastHUDUpdate = now;
     
-    const hpPercent = (state.hp/state.hpMax)*100;
-    const mpPercent = (state.mp/state.mpMax)*100;
-    const need = xpReq(state.level);
-    const prog = clamp(state.xp/need, 0, 1);
-    const xpPercent = prog*100;
-    
-    // Animate bars only if not already animating (pionowe paski używają height zamiast width)
-    if(!state.barAnimations.hp) {
+  const hpPercent = (state.hp/state.hpMax)*100;
+  const mpPercent = (state.mp/state.mpMax)*100;
+  const need = xpReq(state.level);
+  const prog = clamp(state.xp/need, 0, 1);
+  const xpPercent = prog*100;
+  
+    // Desktop: pionowe paski (height)
+  if(!state.barAnimations.hp) {
       hpFill.style.height = `${hpPercent}%`;
-    }
-    if(!state.barAnimations.mp) {
+  }
+  if(!state.barAnimations.mp) {
       mpFill.style.height = `${mpPercent}%`;
-    }
-    if(!state.barAnimations.xp) {
+  }
+  if(!state.barAnimations.xp) {
       xpFill.style.height = `${xpPercent}%`;
-    }
-    
-    hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
-    mpNum.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
-    xpNum.textContent = `${state.xp}/${need}`;
-    lvlNum.textContent = state.level;
-    goldEl.textContent = state.gold;
+  }
+  
+  // Mobile: poziome paski (width)
+  const hpFillMobile = document.getElementById('hpFillMobile');
+  const mpFillMobile = document.getElementById('mpFillMobile');
+  const xpFillMobile = document.getElementById('xpFillMobile');
+  if(hpFillMobile && !state.barAnimations.hp) {
+    hpFillMobile.style.width = `${hpPercent}%`;
+  }
+  if(mpFillMobile && !state.barAnimations.mp) {
+    mpFillMobile.style.width = `${mpPercent}%`;
+  }
+  if(xpFillMobile && !state.barAnimations.xp) {
+    xpFillMobile.style.width = `${xpPercent}%`;
+  }
+  
+  // Desktop values
+  hpNum.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
+  mpNum.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
+  xpNum.textContent = `${state.xp}/${need}`;
+  lvlNum.textContent = state.level;
+  goldEl.textContent = state.gold;
+  
+  // Mobile values
+  const hpNumMobile = document.getElementById('hpNumMobile');
+  const mpNumMobile = document.getElementById('mpNumMobile');
+  const lvlNumMobile = document.getElementById('lvlNumMobile');
+  const goldMobile = document.getElementById('goldMobile');
+  const livesDisplayMobile = document.getElementById('livesDisplayMobile');
+  if(hpNumMobile) hpNumMobile.textContent = `${Math.floor(state.hp)}/${state.hpMax}`;
+  if(mpNumMobile) mpNumMobile.textContent = `${Math.floor(state.mp)}/${state.mpMax}`;
+  if(lvlNumMobile) lvlNumMobile.textContent = state.level;
+  if(goldMobile) goldMobile.textContent = state.gold;
+  if(livesDisplayMobile) livesDisplayMobile.textContent = state.lives;
+  
+  // Desktop lives
     const livesDisplay = document.getElementById('livesDisplay');
     if(livesDisplay) livesDisplay.textContent = state.lives;
-    updateQuestLog();
-  }
+  updateQuestLog();
+}
 
 function animateBar(barType, fromPercent, toPercent) {
+  // Desktop bars (vertical)
   const bar = barType === 'hp' ? hpFill : (barType === 'mp' ? mpFill : xpFill);
   const barContainer = barType === 'hp' ? hpFill.parentElement : (barType === 'mp' ? mpFill.parentElement : xpFill.parentElement);
   
-  state.barAnimations[barType] = true;
-  barContainer.classList.add('bar-animating');
+  // Mobile bars (horizontal)
+  const barMobile = barType === 'hp' ? document.getElementById('hpFillMobile') : 
+                    (barType === 'mp' ? document.getElementById('mpFillMobile') : document.getElementById('xpFillMobile'));
+  const barContainerMobile = barMobile ? barMobile.parentElement.parentElement : null;
   
-  // Set start height (pionowe paski)
+  state.barAnimations[barType] = true;
+  if(barContainer) barContainer.classList.add('bar-animating');
+  if(barContainerMobile) barContainerMobile.classList.add('bar-animating');
+  
+  // Desktop: vertical bars (height)
   bar.style.height = `${fromPercent}%`;
   bar.style.transition = 'height 0.4s ease-out';
+  
+  // Mobile: horizontal bars (width)
+  if(barMobile) {
+    barMobile.style.width = `${fromPercent}%`;
+    barMobile.style.transition = 'width 0.4s ease-out';
+  }
   
   // Force reflow
   bar.offsetHeight;
@@ -425,10 +503,13 @@ function animateBar(barType, fromPercent, toPercent) {
   // Animate to target
   setTimeout(() => {
     bar.style.height = `${toPercent}%`;
+    if(barMobile) barMobile.style.width = `${toPercent}%`;
     setTimeout(() => {
       state.barAnimations[barType] = false;
-      barContainer.classList.remove('bar-animating');
+      if(barContainer) barContainer.classList.remove('bar-animating');
+      if(barContainerMobile) barContainerMobile.classList.remove('bar-animating');
       bar.style.transition = '';
+      if(barMobile) barMobile.style.transition = '';
     }, 400);
   }, 10);
 }
@@ -467,6 +548,26 @@ document.getElementById('closeQuestBtn').addEventListener('click', ()=>{
   state.paused = false;
   questModal.style.display = 'none';
 });
+
+// Close button (X) for quest modal
+const questModalClose = questModal.querySelector('.modal-close');
+if(questModalClose) {
+  questModalClose.addEventListener('click', () => {
+    state.paused = false;
+    questModal.style.display = 'none';
+  });
+}
+
+// Przyciski rozwijania opisów questów
+if(quest1Toggle) {
+  quest1Toggle.addEventListener('click', () => toggleQuestDescription(1));
+}
+if(quest2Toggle) {
+  quest2Toggle.addEventListener('click', () => toggleQuestDescription(2));
+}
+if(quest3Toggle) {
+  quest3Toggle.addEventListener('click', () => toggleQuestDescription(3));
+}
 
 // === Inventory Modal ===
 const inventoryModal = document.getElementById('inventoryModal');
@@ -571,6 +672,11 @@ document.getElementById('invSeedClick').addEventListener('click', ()=>{
   if(state.inventory.seeds > 0) {
     state.plantingMode = !state.plantingMode; // Toggle planting mode
     if(state.plantingMode) {
+      // Automatycznie zamknij modal inventory, żeby można było kliknąć na mapie
+      if(inventoryModal) {
+        inventoryModal.style.display = 'none';
+        state.paused = false;
+      }
       toast('🌱 Tryb zasadzania aktywny - kliknij na mapie');
     } else {
       toast('🌱 Tryb zasadzania wyłączony');
@@ -584,6 +690,16 @@ document.getElementById('closeInventoryBtn').addEventListener('click', ()=>{
   state.plantingMode = false; // Disable planting mode when closing
   inventoryModal.style.display = 'none';
 });
+
+// Close button (X) for inventory modal
+const inventoryModalClose = inventoryModal.querySelector('.modal-close');
+if(inventoryModalClose) {
+  inventoryModalClose.addEventListener('click', () => {
+    state.paused = false;
+    state.plantingMode = false;
+    inventoryModal.style.display = 'none';
+  });
+}
 
 // === Stats Modal ===
 const statsModal = document.getElementById('statsModal');
@@ -632,6 +748,15 @@ document.getElementById('closeStatsBtn').addEventListener('click', ()=>{
   statsModal.style.display = 'none';
 });
 
+// Close button (X) for stats modal
+const statsModalClose = statsModal.querySelector('.modal-close');
+if(statsModalClose) {
+  statsModalClose.addEventListener('click', () => {
+    state.paused = false;
+    statsModal.style.display = 'none';
+  });
+}
+
 // === Interaction Mode ===
 const interactBtn = document.getElementById('interactBtn');
 function toggleInteractionMode(){
@@ -660,6 +785,10 @@ const womanMeat = document.getElementById('womanMeat');
 function updateWomanDialog() {
   womanApples.textContent = state.woman.givenApples;
   womanMeat.textContent = state.woman.givenMeat;
+  // Aktualizuj też quest log jeśli jest otwarty
+  if(questModal && questModal.style.display === 'flex') {
+    updateQuestLog();
+  }
 }
 
 function spawnChild() {
@@ -711,6 +840,15 @@ document.getElementById('closeWomanBtn').addEventListener('click', ()=>{
   womanModal.style.display = 'none';
 });
 
+// Close button (X) for woman modal
+const womanModalClose = womanModal.querySelector('.modal-close');
+if(womanModalClose) {
+  womanModalClose.addEventListener('click', () => {
+    state.paused = false;
+    womanModal.style.display = 'none';
+  });
+}
+
 // === Wizard Dialog ===
 const wizardModal = document.getElementById('wizardModal');
 const wizardMeat = document.getElementById('wizardMeat');
@@ -721,6 +859,10 @@ function updateWizardDialog() {
   wizardMeat.textContent = state.wizard.givenMeat;
   wizardApples.textContent = state.wizard.givenApples;
   wizardGold.textContent = state.wizard.givenGold;
+  // Aktualizuj też quest log jeśli jest otwarty
+  if(questModal && questModal.style.display === 'flex') {
+    updateQuestLog();
+  }
 }
 
 document.getElementById('wizardGiveMeatBtn').addEventListener('click', ()=>{
@@ -775,6 +917,15 @@ document.getElementById('closeWizardBtn').addEventListener('click', ()=>{
   state.paused = false;
   wizardModal.style.display = 'none';
 });
+
+// Close button (X) for wizard modal
+const wizardModalClose = wizardModal.querySelector('.modal-close');
+if(wizardModalClose) {
+  wizardModalClose.addEventListener('click', () => {
+    state.paused = false;
+    wizardModal.style.display = 'none';
+  });
+}
 
 // === Spawning ===
 function spawnEnemy(){
@@ -915,7 +1066,7 @@ function spawnInitial(){
   for(let i=0;i<40;i++){
     spawnPickup(Math.random()<.5?'meat':'mead', rand(0,state.world.width), rand(0,state.world.height));
   }
-  for(let i=0;i<40;i++) spawnPickup('gold', rand(0,state.world.width), rand(0,state.world.height), Math.round(rand(1,4)));
+  // Gold nie spawnuje się na początku - tylko z jaskiń
 }
 
 // === Combat ===
@@ -959,10 +1110,10 @@ function killEnemy(e){
   const enemyDef = ENEMIES.find(en => en.name === e.name || en.emoji === e.emoji);
   if(!enemyDef) {
     // Fallback dla starych przeciwników
-    const dropDir1 = {x: rand(-0.8, 0.8), y: -0.5};
-    const dropDir2 = {x: rand(-0.8, 0.8), y: -0.5};
-    spawnPickup('meat', e.x, e.y, undefined, dropDir1);
-    spawnPickup('xp', e.x, e.y, Math.round(rand(10,20)), dropDir2);
+  const dropDir1 = {x: rand(-0.8, 0.8), y: -0.5};
+  const dropDir2 = {x: rand(-0.8, 0.8), y: -0.5};
+  spawnPickup('meat', e.x, e.y, undefined, dropDir1);
+  spawnPickup('xp', e.x, e.y, Math.round(rand(10,20)), dropDir2);
     const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
     setTimeout(spawnEnemy, 500);
     return;
@@ -1006,15 +1157,13 @@ function killEnemy(e){
     droppedItems.push({kind: 'xp', value: Math.round(rand(10,20))});
   }
   
-  // Ogranicz liczbę dropów do dropCount, ale zawsze zostaw XP i gold jeśli są
+  // Ogranicz liczbę dropów do dropCount, ale zawsze zostaw XP (gold tylko z jaskiń)
   const xpDrop = droppedItems.find(d => d.kind === 'xp');
-  const goldDrop = droppedItems.find(d => d.kind === 'gold');
-  const otherDrops = droppedItems.filter(d => d.kind !== 'xp' && d.kind !== 'gold');
+  const otherDrops = droppedItems.filter(d => d.kind !== 'xp');
   
-  // Zawsze dropnij XP i gold (jeśli są)
+  // Zawsze dropnij XP (jeśli jest)
   const finalDrops = [];
   if(xpDrop) finalDrops.push(xpDrop);
-  if(goldDrop) finalDrops.push(goldDrop);
   
   // Dodaj pozostałe dropy do limitu
   const remainingSlots = Math.max(0, dropCount - finalDrops.length);
@@ -1158,8 +1307,22 @@ function closeLevelUp(){
   updateHUD(); 
 }
 
+// Close button (X) for level up modal (tylko jeśli nie ma punktów do wykorzystania)
+const levelUpModalClose = levelUpModal.querySelector('.modal-close');
+if(levelUpModalClose) {
+  levelUpModalClose.addEventListener('click', () => {
+    if(state.levelUpPoints <= 0) {
+      closeLevelUp();
+    }
+  });
+}
+
 // === Save ===
 document.getElementById('saveBtn').addEventListener('click', ()=>{ localStorage.setItem('chrobry_save_v2', JSON.stringify(state)); toast('💾 Zapisano'); });
+const saveBtnMobile = document.getElementById('saveBtnMobile');
+if(saveBtnMobile) {
+  saveBtnMobile.addEventListener('click', ()=>{ localStorage.setItem('chrobry_save_v2', JSON.stringify(state)); toast('💾 Zapisano'); });
+}
 
 // === Toasts ===
 let toasts = [];
@@ -1300,8 +1463,19 @@ function step(dt){
         
         if(nest.hp <= 0) {
           // Nest destroyed, drop items and schedule respawn
-          const dropCount = Math.round(rand(1, 3)) * state.level; // 1-3 items per level
-          for(let i = 0; i < dropCount; i++) {
+          const baseDropCount = 10; // Domyślnie 10 itemów
+          
+          // Dodatkowe dropy: 1 szansa 10% za każdy level gracza
+          let extraDrops = 0;
+          for(let i = 0; i < state.level; i++) {
+            if(Math.random() < 0.1) {
+              extraDrops++;
+            }
+          }
+          
+          const totalDropCount = baseDropCount + extraDrops;
+          
+          for(let i = 0; i < totalDropCount; i++) {
             const dropDir = {x: rand(-0.8, 0.8), y: -0.5};
             const dropTypes = ['meat', 'apple', 'mead', 'gold', 'seed'];
             const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
@@ -1317,7 +1491,8 @@ function step(dt){
           const nestIdx = state.nests.findIndex(n => n.id === nest.id);
           if(nestIdx >= 0) {
             state.nests.splice(nestIdx, 1);
-            toast(`🏰 Legowisko zniszczone! +${dropCount} przedmiotów`);
+            const extraText = extraDrops > 0 ? ` (+${extraDrops} ekstra!)` : '';
+            toast(`🏰 Legowisko zniszczone! +${totalDropCount} przedmiotów${extraText}`);
           }
         }
       }
@@ -1349,8 +1524,8 @@ function step(dt){
       
       // Dropuj tylko jeśli jest mniej niż 7 jabłek w promieniu
       if(appleCount < 7) {
-        const dropDir = {x: rand(-0.5, 0.5), y: 1}; // Drop forward/down
-        spawnPickup('apple', tree.x, tree.y, undefined, dropDir);
+      const dropDir = {x: rand(-0.5, 0.5), y: 1}; // Drop forward/down
+      spawnPickup('apple', tree.x, tree.y, undefined, dropDir);
       }
     }
   }
@@ -1537,12 +1712,41 @@ function step(dt){
       }
     } else {
       // Normal enemy AI (no nest)
-      // Dzik (🐗) preferuje jabłka zamiast atakowania gracza
+      // Dzik (🐗) - specjalna logika: zawsze szuka jabłek, zjada je, potem czeka przy drzewie
       if(e.emoji === '🐗') {
-        // Szukaj jabłek w promieniu ataku
+        // Inicjalizuj właściwości dzika jeśli nie istnieją
+        if(e.eatingApple === undefined) e.eatingApple = null;
+        if(e.eatingTimer === undefined) e.eatingTimer = 0;
+        if(e.targetTree === undefined) e.targetTree = null;
+        if(e.waitingAngle === undefined) e.waitingAngle = 0;
+        
+        // Jeśli zjada jabłko, kontynuuj zjadanie
+        if(e.eatingApple && e.eatingTimer > 0) {
+          e.eatingTimer -= dt;
+          // Sprawdź czy jabłko nadal istnieje
+          const appleStillExists = state.pickups.find(p => p === e.eatingApple);
+          if(!appleStillExists) {
+            // Jabłko zniknęło (zostało zebrane), przerwij zjadanie
+            e.eatingApple = null;
+            e.eatingTimer = 0;
+          } else if(e.eatingTimer <= 0) {
+            // Zjadł jabłko - usuń je
+            const appleIdx = state.pickups.findIndex(p => p === e.eatingApple);
+            if(appleIdx >= 0) {
+              state.pickups.splice(appleIdx, 1);
+            }
+            e.eatingApple = null;
+            e.eatingTimer = 0;
+            e.targetTree = null; // Reset target tree, będzie szukał nowego
+          }
+          // Podczas zjadania nie ruszaj się
+          return;
+        }
+        
+        // Szukaj jabłek w całym zasięgu wzroku (nie tylko w promieniu ataku)
         let nearestApple = null;
         let nearestAppleDist = Infinity;
-        const attackRange = e.range || 20; // Promień ataku dzika
+        const visionRange = 500; // Zasięg wzroku dzika
         
         for(const pickup of state.pickups) {
           if(pickup.kind === 'apple') {
@@ -1551,52 +1755,118 @@ function step(dt){
             if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
             const dApple = Math.hypot(dxApple, dyApple);
             
-            if(dApple < attackRange && dApple < nearestAppleDist) {
+            if(dApple < visionRange && dApple < nearestAppleDist) {
               nearestApple = pickup;
               nearestAppleDist = dApple;
             }
           }
         }
         
-        // Jeśli znalazł jabłko w promieniu ataku, idź do niego zamiast do gracza
+        // Jeśli znalazł jabłko, idź do niego
         if(nearestApple) {
           let dxApple = nearestApple.x - e.x, dyApple = nearestApple.y - e.y;
           if(Math.abs(dxApple) > state.world.width / 2) dxApple = dxApple > 0 ? dxApple - state.world.width : dxApple + state.world.width;
           if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
           const dApple = Math.hypot(dxApple, dyApple);
+          
+          // Jeśli dotknął jabłka, zacznij je zjadać
+          if(dApple < 25) { // Promień kolizji
+            e.eatingApple = nearestApple;
+            e.eatingTimer = 2000; // 2 sekundy
+            e.targetTree = null; // Reset target tree
+            return; // Zatrzymaj się
+          }
+          
+          // Idź do jabłka
           if(dApple > 0) {
             e.x += (dxApple/dApple) * e.speed;
             e.y += (dyApple/dApple) * e.speed;
           }
         } else {
-          // Brak jabłek w promieniu - normalne AI (atakuj gracza)
-          let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
-          if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
-          if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-          const d = Math.hypot(dx,dy);
-          if(d<380){ 
-            e.x += (dx/d)*e.speed; 
-            e.y += (dy/d)*e.speed; 
+          // Brak jabłek - znajdź najbliższe drzewo i kręć się przy nim
+          if(!e.targetTree) {
+            // Szukaj najbliższego drzewa
+            let nearestTree = null;
+            let nearestTreeDist = Infinity;
+            
+            for(const tree of state.trees) {
+              let dxTree = tree.x - e.x, dyTree = tree.y - e.y;
+              if(Math.abs(dxTree) > state.world.width / 2) dxTree = dxTree > 0 ? dxTree - state.world.width : dxTree + state.world.width;
+              if(Math.abs(dyTree) > state.world.height / 2) dyTree = dyTree > 0 ? dyTree - state.world.height : dyTree + state.world.height;
+              const dTree = Math.hypot(dxTree, dyTree);
+              
+              if(dTree < nearestTreeDist) {
+                nearestTree = tree;
+                nearestTreeDist = dTree;
+              }
+            }
+            
+            if(nearestTree) {
+              e.targetTree = nearestTree;
+            }
           }
-          else { 
-            e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
-            e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+          
+          // Jeśli ma target tree, idź do niego i kręć się wokół
+          if(e.targetTree) {
+            let dxTree = e.targetTree.x - e.x, dyTree = e.targetTree.y - e.y;
+            if(Math.abs(dxTree) > state.world.width / 2) dxTree = dxTree > 0 ? dxTree - state.world.width : dxTree + state.world.width;
+            if(Math.abs(dyTree) > state.world.height / 2) dyTree = dyTree > 0 ? dyTree - state.world.height : dyTree + state.world.height;
+            const dTree = Math.hypot(dxTree, dyTree);
+            
+            // Jeśli jest blisko drzewa, kręć się wokół niego
+            if(dTree < 100) {
+              e.waitingAngle += dt * 0.001; // Powolne kręcenie
+              const radius = 60; // Promień kręcenia
+              const targetX = e.targetTree.x + Math.cos(e.waitingAngle) * radius;
+              const targetY = e.targetTree.y + Math.sin(e.waitingAngle) * radius;
+              
+              let dxTarget = targetX - e.x, dyTarget = targetY - e.y;
+              if(Math.abs(dxTarget) > state.world.width / 2) dxTarget = dxTarget > 0 ? dxTarget - state.world.width : dxTarget + state.world.width;
+              if(Math.abs(dyTarget) > state.world.height / 2) dyTarget = dyTarget > 0 ? dyTarget - state.world.height : dyTarget + state.world.height;
+              const dTarget = Math.hypot(dxTarget, dyTarget);
+              
+              if(dTarget > 0) {
+                e.x += (dxTarget/dTarget) * e.speed * 0.5; // Wolniejsze kręcenie
+                e.y += (dyTarget/dTarget) * e.speed * 0.5;
+              }
+            } else {
+              // Idź do drzewa
+              if(dTree > 0) {
+                e.x += (dxTree/dTree) * e.speed;
+                e.y += (dyTree/dTree) * e.speed;
+              }
+            }
+          } else {
+            // Brak drzew - normalne AI (atakuj gracza)
+            let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
+            if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+            if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+            const d = Math.hypot(dx,dy);
+            if(d<380){ 
+              e.x += (dx/d)*e.speed; 
+              e.y += (dy/d)*e.speed; 
+            }
+            else { 
+              e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
+              e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4;
+            }
           }
         }
+        return; // Zakończ AI dla dzika - nie wykonuj normalnego AI
       } else {
         // Normal enemy AI dla innych przeciwników
-        // Handle wrap-around distance
-        let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
-        if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
-        if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-        const d = Math.hypot(dx,dy);
-        if(d<380){ 
-          e.x += (dx/d)*e.speed; 
-          e.y += (dy/d)*e.speed; 
-        }
-        else { 
-          e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
-          e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
+    // Handle wrap-around distance
+    let dx = state.pos.x - e.x, dy = state.pos.y - e.y;
+    if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+    if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+    const d = Math.hypot(dx,dy);
+    if(d<380){ 
+      e.x += (dx/d)*e.speed; 
+      e.y += (dy/d)*e.speed; 
+    }
+    else { 
+      e.x += Math.cos(e.t*.002 + e.x*1e-3) * .4; 
+      e.y += Math.sin(e.t*.002 + e.y*1e-3) * .4; 
         }
       }
     }
@@ -1912,7 +2182,7 @@ function draw(){
 
   // tło: las
   const tile=80; const startX=Math.floor((cam.x - canvas.width/2)/tile)-2; const startY=Math.floor((cam.y - canvas.height/2)/tile)-2; const endX=Math.floor((cam.x + canvas.width/2)/tile)+2; const endY=Math.floor((cam.y + canvas.height/2)/tile)+2;
-  ctx.globalAlpha=.9; ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
+  ctx.globalAlpha=.9;
   for(let gx=startX; gx<=endX; gx++) for(let gy=startY; gy<=endY; gy++){ 
     // Wrap-around for background tiles
     let wx = gx % Math.ceil(state.world.width / tile);
@@ -1921,24 +2191,33 @@ function draw(){
     if(wy < 0) wy += Math.ceil(state.world.height / tile);
     const sx=wx*tile - cam.x + canvas.width/2; 
     const sy=wy*tile - cam.y + canvas.height/2; 
-    if(((wx*73856093 ^ wy*19349663)>>>0)%7===0){ ctx.fillText('🌲', sx, sy); } 
+    if(((wx*73856093 ^ wy*19349663)>>>0)%7===0){ 
+      // Losowy rozmiar choinki od 1.5 do 2.5x standardowego emoji (30px)
+      // Używamy hash do deterministycznego wygenerowania rozmiaru dla każdej pozycji
+      const hash = ((wx*73856093 ^ wy*19349663)>>>0);
+      const sizeMultiplier = 1.5 + (hash % 100) / 100.0; // 1.5-2.5
+      const treeSize = Math.round(sizeMultiplier * 30);
+      ctx.font=`${treeSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
+      ctx.fillText('🌲', sx, sy); 
+    } 
   }
   ctx.globalAlpha=1;
 
   // Deciduous trees (background) - optimized rendering
-  ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
   ctx.globalAlpha=0.85;
   for(const tree of state.trees) {
+    const treeSize = Math.round((tree.size || 2.5) * 30); // Standardowy emoji to ~30px
+    ctx.font=`${treeSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
     renderWithWrapAround(tree.x, tree.y, (s) => {
-      ctx.fillText('🌳', s.x, s.y);
+          ctx.fillText('🌳', s.x, s.y);
     });
   }
   ctx.globalAlpha=1;
 
   // Home - optimized rendering
-  ctx.font='36px "Apple Color Emoji", "Segoe UI Emoji"';
+        ctx.font='36px "Apple Color Emoji", "Segoe UI Emoji"';
   renderWithWrapAround(state.home.x, state.home.y, (s) => {
-    ctx.fillText('🏠', s.x, s.y);
+        ctx.fillText('🏠', s.x, s.y);
   });
 
   // Nests - optimized rendering (show animal emoji for each nest type)
@@ -1982,7 +2261,7 @@ function draw(){
     if(!spec) continue; // Skip if pickup kind doesn't exist
     const emo = spec.emoji;
     renderWithWrapAround(p.x, p.y, (s) => {
-      ctx.fillText(emo, s.x, s.y);
+          ctx.fillText(emo, s.x, s.y); 
     });
   }
 
@@ -1990,7 +2269,7 @@ function draw(){
   ctx.font='30px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const e of state.enemies){ 
     renderWithWrapAround(e.x, e.y, (s) => {
-      ctx.fillText(e.emoji, s.x, s.y);
+          ctx.fillText(e.emoji, s.x, s.y); 
       // Show HP bar (zawsze widoczny)
       // Znajdź maxHP z ENEMIES na podstawie emoji lub użyj zapisanego hpMax
       let maxHP = e.hpMax || e.hp;
@@ -2014,27 +2293,27 @@ function draw(){
   ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const child of state.children) {
     renderWithWrapAround(child.x, child.y, (s) => {
-      ctx.fillText(child.emoji, s.x, s.y);
+          ctx.fillText(child.emoji, s.x, s.y);
     });
   }
 
   // Woman NPC - optimized rendering
-  ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
+        ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
   renderWithWrapAround(state.woman.x, state.woman.y, (s) => {
-    ctx.fillText('👩', s.x, s.y);
+        ctx.fillText('👩', s.x, s.y);
   });
 
   // Wizard NPC - optimized rendering
-  ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
+        ctx.font='32px "Apple Color Emoji", "Segoe UI Emoji"';
   renderWithWrapAround(state.wizard.x, state.wizard.y, (s) => {
-    ctx.fillText('🧙', s.x, s.y);
+        ctx.fillText('🧙', s.x, s.y);
   });
 
   // projectiles - optimized rendering
-  ctx.font='24px "Apple Color Emoji", "Segoe UI Emoji"';
+          ctx.font='24px "Apple Color Emoji", "Segoe UI Emoji"'; 
   for(const pr of state.projectiles){ 
     renderWithWrapAround(pr.x, pr.y, (s) => {
-      ctx.fillText(pr.emoji, s.x, s.y);
+          ctx.fillText(pr.emoji, s.x, s.y); 
     });
   }
 
@@ -2139,7 +2418,9 @@ if(joystickEl && joystickStick) {
     joystick.touchId = null;
     joystick.stickX = 0;
     joystick.stickY = 0;
-    joystickStick.style.transform = 'translate(-50%, -50%)';
+    if(joystickStick) {
+      joystickStick.style.transform = 'translate(-50%, -50%)';
+    }
     keys['arrowleft'] = false;
     keys['arrowright'] = false;
     keys['arrowup'] = false;
@@ -2150,9 +2431,11 @@ if(joystickEl && joystickStick) {
     if(joystick.active) return;
     e.preventDefault();
     const touch = e.touches[0];
-    joystick.active = true;
-    joystick.touchId = touch.identifier;
-    updateJoystickPosition(touch.clientX, touch.clientY);
+    if(touch) {
+      joystick.active = true;
+      joystick.touchId = touch.identifier;
+      updateJoystickPosition(touch.clientX, touch.clientY);
+    }
   });
   
   joystickEl.addEventListener('touchmove', (e) => {
@@ -2161,20 +2444,59 @@ if(joystickEl && joystickStick) {
     const touch = Array.from(e.touches).find(t => t.identifier === joystick.touchId);
     if(touch) {
       updateJoystickPosition(touch.clientX, touch.clientY);
+    } else {
+      // Touch zniknął - zresetuj
+      resetJoystick();
     }
   });
   
   joystickEl.addEventListener('touchend', (e) => {
     if(!joystick.active) return;
+    e.preventDefault();
     const touch = Array.from(e.changedTouches).find(t => t.identifier === joystick.touchId);
     if(touch) {
       resetJoystick();
     }
   });
   
-  joystickEl.addEventListener('touchcancel', () => {
+  joystickEl.addEventListener('touchcancel', (e) => {
+    e.preventDefault();
     resetJoystick();
   });
+  
+  // Dodatkowe zabezpieczenie - globalne listenery dla touchcancel/touchend
+  // na wypadek gdyby touch został przerwany poza obszarem gałki
+  document.addEventListener('touchend', (e) => {
+    if(joystick.active && joystick.touchId !== null) {
+      const touch = Array.from(e.changedTouches).find(t => t.identifier === joystick.touchId);
+      if(touch) {
+        resetJoystick();
+      }
+    }
+  }, { passive: true });
+  
+  document.addEventListener('touchcancel', (e) => {
+    if(joystick.active && joystick.touchId !== null) {
+      const touch = Array.from(e.changedTouches).find(t => t.identifier === joystick.touchId);
+      if(touch) {
+        resetJoystick();
+      }
+    }
+  }, { passive: true });
+  
+  // Dodatkowe zabezpieczenie - reset przy starcie gry lub pauzie
+  // Sprawdzaj co klatkę czy touch nadal istnieje
+  setInterval(() => {
+    if(joystick.active && joystick.touchId !== null) {
+      // Sprawdź czy touch nadal istnieje
+      const hasTouch = Array.from(document.querySelectorAll('*')).some(() => {
+        // Sprawdź czy są jakieś aktywne touchy
+        return false; // Uproszczone - zawsze resetuj jeśli jest problem
+      });
+      // Jeśli gałka jest aktywna ale nie ma ruchu przez dłuższy czas, zresetuj
+      // (to będzie obsłużone przez normalne touchend/touchcancel)
+    }
+  }, 100);
 }
 
 // === Action Buttons ===
