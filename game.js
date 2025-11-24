@@ -14,7 +14,16 @@ function wrapPos(x, y, width, height) {
 // === Canvas setup ===
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+const minimapCanvas = document.getElementById('minimap');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+function resize(){ 
+  canvas.width = innerWidth; 
+  canvas.height = innerHeight;
+  if(minimapCanvas) {
+    minimapCanvas.width = 150;
+    minimapCanvas.height = 150;
+  }
+}
 addEventListener('resize', resize, {passive:true});
 resize();
 
@@ -36,8 +45,10 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   attack: { cooldown: 0, cdMelee: 400, cdRanged: 300 },
   meleeDamage: 18, // Siła ataku wręcz
   rangedDamage: 16, // Siła ataku projectile
+  pickupMagnetRange: 0, // Zasięg przyciągania dropów (w pikselach)
   levelUpPoints: 0, // Punkty do wykorzystania przy levelowaniu
   meleeSpin: null,
+  lastAttackType: null, // 'melee' or 'ranged' - ostatni typ ataku gracza
   enemies: [], pickups: [], projectiles: [],
   knockback: {x:0, y:0, t:0}, // Knockback animation
   lastHitTime: 0, // Cooldown for taking damage
@@ -62,12 +73,23 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   home: { x: 3000, y: 2800 }, // Domek nad graczem na starcie
   // New: nests/spawners for enemies
   nests: [], // Array of nests: { type: enemyIndex, x, y, hp, hpMax, spawnTimer, nextSpawn, id, respawnTimer }
-  nestRespawns: [] // Array of pending respawns: { type: enemyIndex, timer: 30000 }
+  nestRespawns: [], // Array of pending respawns: { type: enemyIndex, timer: 30000 }
+  // Achievements system
+  achievements: {}, // { achievementId: true/false }
+  stats: { // Statystyki do śledzenia achievmentów
+    enemiesKilled: 0,
+    treesPlanted: 0,
+    nestsDestroyed: 0,
+    itemsCollected: { apples: 0, meat: 0, mead: 0, gold: 0, seeds: 0, wood: 0 },
+    childrenBorn: 0,
+    maxLevel: 1
+  }
 };
 
 // Initialize missing stats for old saves
-if(state.meleeDamage === undefined) state.meleeDamage = 18;
-if(state.rangedDamage === undefined) state.rangedDamage = 16;
+  if(state.meleeDamage === undefined) state.meleeDamage = 18;
+  if(state.rangedDamage === undefined) state.rangedDamage = 16;
+  if(state.pickupMagnetRange === undefined) state.pickupMagnetRange = 0;
 if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
   if(state.inventory.wood === undefined) state.inventory.wood = 0;
   if(state.interactionMode === undefined) state.interactionMode = false;
@@ -75,6 +97,28 @@ if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
   if(state.nests === undefined) state.nests = [];
   if(state.nestRespawns === undefined) state.nestRespawns = [];
   if(state.lives === undefined) state.lives = 3;
+  if(state.achievements === undefined) state.achievements = {};
+  if(state.stats === undefined) {
+    state.stats = {
+      enemiesKilled: 0,
+      treesPlanted: 0,
+      nestsDestroyed: 0,
+      itemsCollected: { apples: 0, meat: 0, mead: 0, gold: 0, seeds: 0, wood: 0 },
+      childrenBorn: 0,
+      maxLevel: 1
+    };
+  }
+  if(state.achievements === undefined) state.achievements = {};
+  if(state.stats === undefined) {
+    state.stats = {
+      enemiesKilled: 0,
+      treesPlanted: 0,
+      nestsDestroyed: 0,
+      itemsCollected: { apples: 0, meat: 0, mead: 0, gold: 0, seeds: 0, wood: 0 },
+      childrenBorn: 0,
+      maxLevel: 1
+    };
+  }
 
 // Initialize trees
 if(state.trees.length === 0) {
@@ -210,6 +254,71 @@ const PICKUPS = {
 
 // XP requirement curve - zmniejszone wymagania dla łatwiejszego osiągnięcia wyższych poziomów
 const xpReq = lvl => Math.floor(50 + (lvl-1)*(lvl-1)*8);
+
+// === Achievements System ===
+const ACHIEVEMENTS = [
+  // Questy
+  { id: 'quest_tree', emoji: '🌳', name: 'Pierwsze Drzewo', desc: 'Zasadź swoje pierwsze drzewo', check: () => state.quests.tree },
+  { id: 'quest_son', emoji: '👶', name: 'Ojciec', desc: 'Spłodź dziecko', check: () => state.quests.son },
+  { id: 'quest_book', emoji: '📖', name: 'Pisarz', desc: 'Napisz książkę', check: () => state.quests.book },
+  { id: 'quest_all', emoji: '🏆', name: 'Mistrz Questów', desc: 'Ukończ wszystkie questy', check: () => state.quests.tree && state.quests.son && state.quests.book },
+  
+  // Poziomy
+  { id: 'level_5', emoji: '⭐', name: 'Nowicjusz', desc: 'Osiągnij poziom 5', check: () => state.stats.maxLevel >= 5 },
+  { id: 'level_10', emoji: '⭐⭐', name: 'Doświadczony', desc: 'Osiągnij poziom 10', check: () => state.stats.maxLevel >= 10 },
+  { id: 'level_20', emoji: '⭐⭐⭐', name: 'Weteran', desc: 'Osiągnij poziom 20', check: () => state.stats.maxLevel >= 20 },
+  { id: 'level_50', emoji: '👑', name: 'Legenda', desc: 'Osiągnij poziom 50', check: () => state.stats.maxLevel >= 50 },
+  
+  // Zabijanie wrogów
+  { id: 'kill_10', emoji: '⚔️', name: 'Wojownik', desc: 'Zabij 10 wrogów', check: () => state.stats.enemiesKilled >= 10 },
+  { id: 'kill_50', emoji: '🗡️', name: 'Zabójca', desc: 'Zabij 50 wrogów', check: () => state.stats.enemiesKilled >= 50 },
+  { id: 'kill_100', emoji: '💀', name: 'Rzeźnik', desc: 'Zabij 100 wrogów', check: () => state.stats.enemiesKilled >= 100 },
+  { id: 'kill_500', emoji: '☠️', name: 'Anioł Śmierci', desc: 'Zabij 500 wrogów', check: () => state.stats.enemiesKilled >= 500 },
+  
+  // Jaskinie
+  { id: 'nest_1', emoji: '🏰', name: 'Niszczyciel', desc: 'Zniszcz pierwszą jaskinię', check: () => state.stats.nestsDestroyed >= 1 },
+  { id: 'nest_5', emoji: '🏛️', name: 'Demolka', desc: 'Zniszcz 5 jaskiń', check: () => state.stats.nestsDestroyed >= 5 },
+  { id: 'nest_10', emoji: '💣', name: 'Eksplozja', desc: 'Zniszcz 10 jaskiń', check: () => state.stats.nestsDestroyed >= 10 },
+  
+  // Drzewa
+  { id: 'tree_5', emoji: '🌲', name: 'Ogrodnik', desc: 'Zasadź 5 drzew', check: () => state.stats.treesPlanted >= 5 },
+  { id: 'tree_20', emoji: '🌳', name: 'Leśnik', desc: 'Zasadź 20 drzew', check: () => state.stats.treesPlanted >= 20 },
+  { id: 'tree_50', emoji: '🌴', name: 'Las', desc: 'Zasadź 50 drzew', check: () => state.stats.treesPlanted >= 50 },
+  
+  // Zbieranie przedmiotów
+  { id: 'collect_100_apple', emoji: '🍎', name: 'Zbieracz Jabłek', desc: 'Zbierz 100 jabłek', check: () => state.stats.itemsCollected.apples >= 100 },
+  { id: 'collect_100_meat', emoji: '🍖', name: 'Myśliwy', desc: 'Zbierz 100 mięsa', check: () => state.stats.itemsCollected.meat >= 100 },
+  { id: 'collect_50_mead', emoji: '🍾', name: 'Pijak', desc: 'Zbierz 50 flaszek', check: () => state.stats.itemsCollected.mead >= 50 },
+  { id: 'collect_100_gold', emoji: '💰', name: 'Bogacz', desc: 'Zbierz 100 monet', check: () => state.stats.itemsCollected.gold >= 100 },
+  { id: 'collect_500_gold', emoji: '💎', name: 'Milioner', desc: 'Zbierz 500 monet', check: () => state.stats.itemsCollected.gold >= 500 },
+  
+  // Dzieci
+  { id: 'child_1', emoji: '👶', name: 'Ojciec', desc: 'Miej pierwsze dziecko', check: () => state.stats.childrenBorn >= 1 },
+  { id: 'child_3', emoji: '👨‍👩‍👧‍👦', name: 'Rodzina', desc: 'Miej 3 dzieci', check: () => state.stats.childrenBorn >= 3 },
+  { id: 'child_5', emoji: '👪', name: 'Klany', desc: 'Miej 5 dzieci', check: () => state.stats.childrenBorn >= 5 },
+  
+  // Specjalne
+  { id: 'survivor', emoji: '💪', name: 'Ocalony', desc: 'Przetrwaj z 1 HP', check: () => state.hp <= 1 && state.hp > 0 },
+  { id: 'collector', emoji: '🎒', name: 'Kolekcjoner', desc: 'Zbierz łącznie 500 przedmiotów', check: () => {
+    const total = state.stats.itemsCollected.apples + state.stats.itemsCollected.meat + 
+                  state.stats.itemsCollected.mead + state.stats.itemsCollected.gold + 
+                  state.stats.itemsCollected.seeds + state.stats.itemsCollected.wood;
+    return total >= 500;
+  }}
+];
+
+// Funkcja sprawdzająca i odblokowująca achievmenty
+function checkAchievements() {
+  for(const achievement of ACHIEVEMENTS) {
+    if(!state.achievements[achievement.id] && achievement.check()) {
+      state.achievements[achievement.id] = true;
+      toast(`🏆 Osiągnięcie odblokowane: ${achievement.emoji} ${achievement.name}`);
+      updateAchievementsModal();
+      // Zapisz stan
+      localStorage.setItem('chrobry_save_v2', JSON.stringify(state));
+    }
+  }
+}
 
 // === Input ===
 let pointer = {active:false,id:null,x:0,y:0,justTapped:false};
@@ -431,6 +540,9 @@ const mpNum = document.getElementById('mpNum');
 const xpNum = document.getElementById('xpNum');
 const lvlNum = document.getElementById('lvlNum');
 const goldEl = document.getElementById('gold');
+const hudApples = document.getElementById('hudApples');
+const hudMeat = document.getElementById('hudMeat');
+const hudMead = document.getElementById('hudMead');
 
   function updateHUD(force = false){
     const now = performance.now();
@@ -459,6 +571,9 @@ const goldEl = document.getElementById('gold');
   xpNum.textContent = `${state.xp}/${need}`;
   lvlNum.textContent = state.level;
   goldEl.textContent = state.gold;
+  if(hudApples) hudApples.textContent = state.inventory.apples || 0;
+  if(hudMeat) hudMeat.textContent = state.inventory.meat || 0;
+  if(hudMead) hudMead.textContent = state.inventory.mead || 0;
     const livesDisplay = document.getElementById('livesDisplay');
     if(livesDisplay) livesDisplay.textContent = state.lives;
   updateQuestLog();
@@ -511,6 +626,7 @@ function toggleQuestLog(){
   } else {
     state.paused = true;
     questModal.style.display = 'flex';
+    updateQuestLog(); // Aktualizuj quest log przy otwieraniu
   }
 }
 
@@ -688,6 +804,7 @@ const statsMeleeCD = document.getElementById('statsMeleeCD');
 const statsMeleeDmg = document.getElementById('statsMeleeDmg');
 const statsRangedCD = document.getElementById('statsRangedCD');
 const statsRangedDmg = document.getElementById('statsRangedDmg');
+const statsMagnet = document.getElementById('statsMagnet');
 
 function updateStats() {
   statsHP.textContent = Math.floor(state.hp);
@@ -700,6 +817,8 @@ function updateStats() {
   statsMeleeDmg.textContent = state.meleeDamage;
   statsRangedCD.textContent = Math.round(state.attack.cdRanged);
   statsRangedDmg.textContent = state.rangedDamage;
+  // Całkowity zasięg = poziom + wartość z karty postaci
+  statsMagnet.textContent = state.level + state.pickupMagnetRange + 'px (poziom: ' + state.level + ' + bonus: ' + state.pickupMagnetRange + ')';
 }
 
 function toggleStats(){
@@ -776,6 +895,7 @@ function spawnChild() {
     speed: 2.0,
     reachedPlayer: false, // Has reached player for the first time
     lastAttack: 0,
+    meleeSpin: null, // Melee spin dla dziecka (naśladuje gracza)
     id: Math.random().toString(36).slice(2)
   };
   state.children.push(child);
@@ -788,9 +908,16 @@ document.getElementById('giveAppleBtn').addEventListener('click', ()=>{
     state.woman.givenApples++;
     updateWomanDialog();
     if(state.woman.givenApples >= 50 && state.woman.givenMeat >= 50) {
-      state.quests.son = true;
+      // Ukończ quest tylko przy pierwszym dziecku
+      if(!state.quests.son) {
+        state.quests.son = true;
+        toast('🎉 Ukończono quest: Spłodź syna!');
+      }
       spawnChild();
-      toast('🎉 Ukończono quest: Spłodź syna!');
+      // Resetuj liczniki po urodzeniu dziecka
+      state.woman.givenApples = 0;
+      state.woman.givenMeat = 0;
+      updateWomanDialog();
       updateHUD();
     }
   }
@@ -802,9 +929,16 @@ document.getElementById('giveMeatBtn').addEventListener('click', ()=>{
     state.woman.givenMeat++;
     updateWomanDialog();
     if(state.woman.givenApples >= 50 && state.woman.givenMeat >= 50) {
-      state.quests.son = true;
+      // Ukończ quest tylko przy pierwszym dziecku
+      if(!state.quests.son) {
+        state.quests.son = true;
+        toast('🎉 Ukończono quest: Spłodź syna!');
+      }
       spawnChild();
-      toast('🎉 Ukończono quest: Spłodź syna!');
+      // Resetuj liczniki po urodzeniu dziecka
+      state.woman.givenApples = 0;
+      state.woman.givenMeat = 0;
+      updateWomanDialog();
       updateHUD();
     }
   }
@@ -1050,6 +1184,7 @@ function startMeleeSpin(){
   state.attack.cooldown = state.attack.cdMelee;
   const startAngle = rand(0, Math.PI*2); // Random starting angle around player
   state.meleeSpin = { t:0, dur:450, hit:new Set(), startAngle }; // 450 ms pełne okrążenie (szybszy)
+  state.lastAttackType = 'melee'; // Zapisz typ ataku dla dzieci
 }
 
 function fireArrow(target){
@@ -1078,6 +1213,7 @@ function fireArrow(target){
   const vx = (ax/len)*6.0; 
   const vy = (ay/len)*6.0;
   state.projectiles.push({ x:state.pos.x, y:state.pos.y, vx, vy, ttl: 6000, dmg: state.rangedDamage, emoji:'🏹' });
+  state.lastAttackType = 'ranged'; // Zapisz typ ataku dla dzieci
 }
 
 function killEnemy(e){
@@ -1195,6 +1331,7 @@ const upMeleeSpeedValue = document.getElementById('upMeleeSpeedValue');
 const upMeleeDmgValue = document.getElementById('upMeleeDmgValue');
 const upRangedSpeedValue = document.getElementById('upRangedSpeedValue');
 const upRangedDmgValue = document.getElementById('upRangedDmgValue');
+const upMagnetValue = document.getElementById('upMagnetValue');
 
 function updateLevelUpModal() {
   levelUpPoints.textContent = state.levelUpPoints;
@@ -1205,9 +1342,11 @@ function updateLevelUpModal() {
   upMeleeDmgValue.textContent = state.meleeDamage;
   upRangedSpeedValue.textContent = Math.round(state.attack.cdRanged) + 'ms';
   upRangedDmgValue.textContent = state.rangedDamage;
+  // Wyświetl całkowity zasięg (poziom + bonus)
+  if(upMagnetValue) upMagnetValue.textContent = (state.level + state.pickupMagnetRange) + 'px (' + state.level + '+' + state.pickupMagnetRange + ')';
   
   // Disable buttons if no points
-  const buttons = ['upHP', 'upMP', 'upSpeed', 'upMeleeSpeed', 'upMeleeDmg', 'upRangedSpeed', 'upRangedDmg'];
+  const buttons = ['upHP', 'upMP', 'upSpeed', 'upMeleeSpeed', 'upMeleeDmg', 'upRangedSpeed', 'upRangedDmg', 'upMagnet'];
   buttons.forEach(id => {
     const btn = document.getElementById(id);
     btn.disabled = state.levelUpPoints <= 0;
@@ -1266,6 +1405,12 @@ document.getElementById('upRangedSpeed').addEventListener('click', ()=>{
 document.getElementById('upRangedDmg').addEventListener('click', ()=>{
   if(state.levelUpPoints > 0) {
     state.rangedDamage = Math.floor(state.rangedDamage*1.1);
+    spendLevelUpPoint();
+  }
+});
+document.getElementById('upMagnet').addEventListener('click', ()=>{
+  if(state.levelUpPoints > 0) {
+    state.pickupMagnetRange += 1; // +1 piksel za każdy level
     spendLevelUpPoint();
   }
 });
@@ -1721,7 +1866,15 @@ function step(dt){
           if(Math.abs(dxApple) > state.world.width / 2) dxApple = dxApple > 0 ? dxApple - state.world.width : dxApple + state.world.width;
           if(Math.abs(dyApple) > state.world.height / 2) dyApple = dyApple > 0 ? dyApple - state.world.height : dyApple + state.world.height;
           const dApple = Math.hypot(dxApple, dyApple);
-          if(dApple > 0) {
+          
+          // Jeśli dzik dotknął jabłka, zjedz je
+          if(dApple < 25) { // Promień kolizji (około 25 jednostek)
+            const appleIdx = state.pickups.findIndex(p => p === nearestApple);
+            if(appleIdx >= 0) {
+              state.pickups.splice(appleIdx, 1);
+              // Można dodać efekt wizualny lub dźwięk
+            }
+          } else if(dApple > 0) {
             e.x += (dxApple/dApple) * e.speed;
             e.y += (dyApple/dApple) * e.speed;
           }
@@ -1849,23 +2002,86 @@ function step(dt){
     child.x = childWrapped.x;
     child.y = childWrapped.y;
     
-    // Attack enemies within 100 range of player
+    // Attack enemies within 100 range of player - naśladuj ataki gracza
     if(child.reachedPlayer && distToPlayer < 100) {
+      // Update child melee spin (jeśli aktywny)
+      if(child.meleeSpin) {
+        child.meleeSpin.t += dt;
+        const m = child.meleeSpin;
+        const r = 60; // Promień miecza dziecka (mniejszy niż gracza)
+        const prog = clamp(m.t / m.dur, 0, 1);
+        const startAng = m.startAngle || 0;
+        const ang = startAng + prog * 2 * Math.PI;
+        const sx = child.x + Math.cos(ang) * r;
+        const sy = child.y + Math.sin(ang) * r;
+        
+        // Sprawdź trafienia wrogów
+        for(const enemy of state.enemies) {
+          const id = enemy.id;
+          if(m.hit.has(id)) continue;
+          let edx = enemy.x - sx, edy = enemy.y - sy;
+          if(Math.abs(edx) > state.world.width / 2) edx = edx > 0 ? edx - state.world.width : edx + state.world.width;
+          if(Math.abs(edy) > state.world.height / 2) edy = edy > 0 ? edy - state.world.height : edy + state.world.height;
+          if(Math.hypot(edx, edy) < 25) {
+            m.hit.add(id);
+            const damage = state.level;
+            enemy.hp -= damage;
+            floatingText(`-${damage}`, enemy.x, enemy.y, '#ff6a6a');
+            if(enemy.hp <= 0) {
+              killEnemy(enemy);
+            }
+          }
+        }
+        
+        if(m.t >= m.dur) {
+          child.meleeSpin = null;
+        }
+      }
+      
+      // Znajdź najbliższego wroga
+      let nearestEnemy = null;
+      let nearestEnemyDist = Infinity;
       for(const enemy of state.enemies) {
         let edx = enemy.x - child.x, edy = enemy.y - child.y;
         if(Math.abs(edx) > state.world.width / 2) edx = edx > 0 ? edx - state.world.width : edx + state.world.width;
         if(Math.abs(edy) > state.world.height / 2) edy = edy > 0 ? edy - state.world.height : edy + state.world.height;
         const distToEnemy = Math.hypot(edx, edy);
-        
-        // Attack if close enough and cooldown passed
-        if(distToEnemy < 30 && currentTime - child.lastAttack > 1000) { // 1 second cooldown
-          const damage = state.level; // Damage equals player level
-          enemy.hp -= damage;
-          floatingText(`-${damage}`, enemy.x, enemy.y, '#ff6a6a');
-          child.lastAttack = currentTime;
-          
-          if(enemy.hp <= 0) {
-            killEnemy(enemy);
+        if(distToEnemy < 100 && distToEnemy < nearestEnemyDist) {
+          nearestEnemy = enemy;
+          nearestEnemyDist = distToEnemy;
+        }
+      }
+      
+      // Atak dziecka - gdy gracz uderza mieczem, wszystkie dzieci też uderzają mieczem
+      if(nearestEnemy) { // Bez cooldownu
+        // Jeśli gracz uderza mieczem, wszystkie dzieci też uderzają mieczem
+        if(state.meleeSpin && !child.meleeSpin) {
+          const startAngle = rand(0, Math.PI * 2);
+          child.meleeSpin = { t: 0, dur: 450, hit: new Set(), startAngle };
+        } else if(!state.meleeSpin && !child.meleeSpin) {
+          // Gdy gracz nie atakuje melee, dzieci używają swoich domyślnych ataków
+          if(child.gender === 'boy') {
+            // Syn (👶) - używa miecza
+            const startAngle = rand(0, Math.PI * 2);
+            child.meleeSpin = { t: 0, dur: 450, hit: new Set(), startAngle };
+          } else if(child.gender === 'girl') {
+            // Córka (👧) - strzela z łuku
+            let edx = nearestEnemy.x - child.x, edy = nearestEnemy.y - child.y;
+            if(Math.abs(edx) > state.world.width / 2) edx = edx > 0 ? edx - state.world.width : edx + state.world.width;
+            if(Math.abs(edy) > state.world.height / 2) edy = edy > 0 ? edy - state.world.height : edy + state.world.height;
+            const len = Math.hypot(edx, edy) || 1;
+            const vx = (edx / len) * 5.0; // Nieco wolniejsza niż gracz
+            const vy = (edy / len) * 5.0;
+            state.projectiles.push({ 
+              x: child.x, 
+              y: child.y, 
+              vx, 
+              vy, 
+              ttl: 6000, 
+              dmg: state.level, 
+              emoji: '🏹',
+              fromChild: true // Oznacz że to od dziecka
+            });
           }
         }
       }
@@ -1998,13 +2214,41 @@ function step(dt){
     if(pr.ttl<=0) state.projectiles.splice(i,1);
   }
 
-  // pickups
+  // pickups - przyciąganie i zbieranie
   for(let i=state.pickups.length-1;i>=0;i--){
     const p = state.pickups[i]; 
     let dx = p.x - state.pos.x, dy = p.y - state.pos.y;
     if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
     if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
-    if(Math.hypot(dx, dy) < 28){
+    const dist = Math.hypot(dx, dy);
+    
+    // Przyciąganie dropów (jak odkurzacz) - zasięg = poziom postaci + wartość z karty postaci
+    const magnetRange = state.level + state.pickupMagnetRange;
+    const collectRadius = 15; // Promień zbierania - gdy przedmiot osiągnie środek gracza (około połowa emoji)
+    
+    if(magnetRange > 0 && dist > collectRadius && dist <= magnetRange) {
+      // Oznacz pickup jako przyciągany (dla animacji)
+      p.beingPulled = true;
+      
+      // Przyciągnij pickup do gracza - zwiększona prędkość dla lepszej animacji
+      // Prędkość zależy od odległości - im bliżej, tym szybciej (efekt przyspieszenia)
+      const speedMultiplier = 1 + (1 - (dist / magnetRange)) * 2; // 1x do 3x prędkości
+      const pullSpeed = 5.0 * speedMultiplier * (dt / 16); // Zwiększona bazowa prędkość
+      const pullX = (dx / dist) * pullSpeed;
+      const pullY = (dy / dist) * pullSpeed;
+      p.x -= pullX;
+      p.y -= pullY;
+      
+      // Wrap-around dla pickupów
+      const wrapped = wrapPos(p.x, p.y, state.world.width, state.world.height);
+      p.x = wrapped.x;
+      p.y = wrapped.y;
+    } else {
+      p.beingPulled = false;
+    }
+    
+    // Zbieranie pickupów (gdy osiągną środek gracza) - mały promień zbierania
+    if(dist < collectRadius){
       if(p.kind==='meat'){ 
         state.inventory.meat++;
         toast('🍖 +Mięso');
@@ -2147,8 +2391,8 @@ function draw(){
   }
   ctx.globalAlpha=1;
 
-  // Home - optimized rendering
-        ctx.font='36px "Apple Color Emoji", "Segoe UI Emoji"';
+  // Home - optimized rendering (4x emoji size = 120px)
+        ctx.font='120px "Apple Color Emoji", "Segoe UI Emoji"';
   renderWithWrapAround(state.home.x, state.home.y, (s) => {
         ctx.fillText('🏠', s.x, s.y);
   });
@@ -2187,15 +2431,86 @@ function draw(){
     });
   }
 
-  // pickups - optimized rendering
+  // pickups - optimized rendering z animacją przyciągania
   ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
+  const playerScreenPos = worldToScreen(state.pos.x, state.pos.y);
+  const magnetRange = state.level + state.pickupMagnetRange;
+  
   for(const p of state.pickups){ 
     const spec = PICKUPS[p.kind];
     if(!spec) continue; // Skip if pickup kind doesn't exist
     const emo = spec.emoji;
+    
     renderWithWrapAround(p.x, p.y, (s) => {
-          ctx.fillText(emo, s.x, s.y); 
+      // Animacja przyciągania - rysuj linię i efekt świecenia
+      if(p.beingPulled && magnetRange > 0) {
+        // Oblicz odległość na ekranie
+        let dx = s.x - playerScreenPos.x, dy = s.y - playerScreenPos.y;
+        const screenDist = Math.hypot(dx, dy);
+        
+        // Rysuj animację dla wszystkich przyciąganych przedmiotów (niezależnie od odległości na ekranie)
+        if(screenDist > 0) {
+          // Rysuj świecącą linię między graczem a przedmiotem
+          ctx.save();
+          // Alpha zależy od odległości - im bliżej, tym jaśniej
+          const maxDist = Math.max(magnetRange * 2, 200); // Maksymalna odległość dla animacji
+          const alpha = Math.max(0.2, 1 - (screenDist / maxDist));
+          ctx.globalAlpha = alpha * 0.7; // Zwiększona widoczność
+          ctx.strokeStyle = '#4ade80'; // Zielony kolor
+          ctx.lineWidth = 2.5; // Nieco grubsza linia
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#4ade80';
+          ctx.beginPath();
+          ctx.moveTo(playerScreenPos.x, playerScreenPos.y);
+          ctx.lineTo(s.x, s.y);
+          ctx.stroke();
+          
+          // Dodaj animowane cząsteczki wzdłuż linii (poruszające się w kierunku gracza)
+          const particleCount = Math.max(3, Math.floor(screenDist / 20));
+          const timeOffset = (Date.now() % 2000) / 2000; // Animacja w pętli 2 sekundy
+          for(let i = 0; i < particleCount; i++) {
+            const t = ((i / particleCount) + timeOffset) % 1; // Cząsteczki poruszają się wzdłuż linii
+            const px = playerScreenPos.x + dx * t;
+            const py = playerScreenPos.y + dy * t;
+            ctx.globalAlpha = alpha * 0.9;
+            ctx.fillStyle = '#4ade80';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.restore();
+          
+          // Efekt świecenia wokół przyciąganego przedmiotu
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#4ade80';
+          ctx.fillText(emo, s.x, s.y);
+          ctx.restore();
+        }
+      }
+      
+      // Normalny pickup
+      ctx.fillText(emo, s.x, s.y);
     });
+  }
+  
+  // Rysuj efekt wizualny zasięgu przyciągania wokół gracza (opcjonalnie, tylko jeśli magnetRange > 0)
+  if(magnetRange > 0) {
+    ctx.save();
+    const time = Date.now() / 1000;
+    const pulseAlpha = 0.1 + Math.sin(time * 3) * 0.05; // Pulsujący efekt
+    ctx.globalAlpha = pulseAlpha;
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(playerScreenPos.x, playerScreenPos.y, magnetRange, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
   }
 
   // enemies - optimized rendering
@@ -2223,10 +2538,28 @@ function draw(){
   }
 
   // Children - optimized rendering
-  ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
+  // Rozmiar dziecka = 0.5 * rozmiar gracza
+  const playerFontSizeForChild = 34 + (state.level * 0.25);
+  const childFontSize = playerFontSizeForChild * 0.5;
+  ctx.font=`${childFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
   for(const child of state.children) {
     renderWithWrapAround(child.x, child.y, (s) => {
-          ctx.fillText(child.emoji, s.x, s.y);
+      ctx.fillText(child.emoji, s.x, s.y);
+      
+      // Render child melee spin (naśladuje gracza)
+      if(child.meleeSpin) {
+        const m = child.meleeSpin;
+        const prog = clamp(m.t / m.dur, 0, 1);
+        const startAng = m.startAngle || 0;
+        const ang = startAng + prog * 2 * Math.PI;
+        const r = 60 * 0.5; // Promień miecza dziecka (50% rozmiaru gracza)
+        const sx = s.x + Math.cos(ang) * r;
+        const sy = s.y + Math.sin(ang) * r;
+        const swordFontSize = childFontSize * 0.8; // Miecz nieco mniejszy niż dziecko
+        ctx.font=`${swordFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
+        ctx.fillText('⚔️', sx, sy);
+        ctx.font=`${childFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`; // Przywróć rozmiar
+      }
     });
   }
 
@@ -2251,8 +2584,12 @@ function draw(){
   }
 
   // player — mężczyzna z wąsami (używamy 🧔 jako styl moustache) lub reakcja emoji
+  // Rozmiar gracza = bazowy (34px) + 0.25 * poziom
   const heroEmoji = state.playerReaction.emoji || '🧔';
-  const ps=worldToScreen(state.pos.x, state.pos.y); ctx.font='34px "Apple Color Emoji", "Segoe UI Emoji"'; ctx.fillText(heroEmoji, ps.x, ps.y);
+  const ps=worldToScreen(state.pos.x, state.pos.y);
+  const playerFontSize = 34 + (state.level * 0.25);
+  ctx.font=`${playerFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
+  ctx.fillText(heroEmoji, ps.x, ps.y);
 
   // miecz w wirze
   if(state.meleeSpin){ const m=state.meleeSpin; const prog=clamp(m.t/m.dur,0,1); const startAng = m.startAngle || 0; const ang=startAng + prog*2*Math.PI; const r=90; const sx=ps.x + Math.cos(ang)*r; const sy=ps.y + Math.sin(ang)*r; ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"'; ctx.fillText('⚔️', sx, sy); }
@@ -2262,6 +2599,66 @@ function draw(){
 
   // toasty
   ctx.save(); ctx.font='16px system-ui, sans-serif'; ctx.textAlign='center'; let y=canvas.height-26; for(let i=toasts.length-1;i>=0;i--){ const t=toasts[i]; t.t-=16; if(t.t<=0){ toasts.splice(i,1); continue; } ctx.globalAlpha=Math.min(1,t.t/400); ctx.fillStyle='#e6e6e6'; ctx.fillText(t.msg, canvas.width/2, y); y-=20; } ctx.restore();
+  
+  // Mini-mapa
+  drawMiniMap();
+}
+
+// Funkcja rysująca mini-mapę
+function drawMiniMap() {
+  if(!minimapCtx || !minimapCanvas) return;
+  
+  const mapSize = minimapCanvas.width;
+  const worldWidth = state.world.width;
+  const worldHeight = state.world.height;
+  
+  // Wyczyść mini-mapę
+  minimapCtx.fillStyle = 'rgba(0,0,0,0.6)';
+  minimapCtx.fillRect(0, 0, mapSize, mapSize);
+  
+  // Funkcja konwersji współrzędnych świata na mini-mapę
+  const worldToMinimap = (wx, wy) => {
+    const x = (wx / worldWidth) * mapSize;
+    const y = (wy / worldHeight) * mapSize;
+    return { x, y };
+  };
+  
+  // Rysuj dom
+  const homePos = worldToMinimap(state.home.x, state.home.y);
+  minimapCtx.font = '16px "Apple Color Emoji", "Segoe UI Emoji"';
+  minimapCtx.fillText('🏠', homePos.x - 8, homePos.y + 8);
+  
+  // Rysuj niewiastę
+  const womanPos = worldToMinimap(state.woman.x, state.woman.y);
+  minimapCtx.font = '14px "Apple Color Emoji", "Segoe UI Emoji"';
+  minimapCtx.fillText('👩', womanPos.x - 7, womanPos.y + 7);
+  
+  // Rysuj czarodzieja
+  const wizardPos = worldToMinimap(state.wizard.x, state.wizard.y);
+  minimapCtx.font = '14px "Apple Color Emoji", "Segoe UI Emoji"';
+  minimapCtx.fillText('🧙', wizardPos.x - 7, wizardPos.y + 7);
+  
+  // Rysuj siedliska mobów (jaskinie)
+  for(const nest of state.nests) {
+    const nestPos = worldToMinimap(nest.x, nest.y);
+    const enemyDef = ENEMIES[nest.type];
+    if(enemyDef) {
+      // Rysuj emoji jaskini (emoji wroga)
+      minimapCtx.font = '10px "Apple Color Emoji", "Segoe UI Emoji"';
+      minimapCtx.fillText(enemyDef.emoji, nestPos.x - 5, nestPos.y + 5);
+    } else {
+      // Fallback - kamień
+      minimapCtx.font = '10px "Apple Color Emoji", "Segoe UI Emoji"';
+      minimapCtx.fillText('🪨', nestPos.x - 5, nestPos.y + 5);
+    }
+  }
+  
+  // Rysuj gracza (środek)
+  const playerPos = worldToMinimap(state.pos.x, state.pos.y);
+  minimapCtx.fillStyle = '#4ade80';
+  minimapCtx.beginPath();
+  minimapCtx.arc(playerPos.x, playerPos.y, 3, 0, Math.PI * 2);
+  minimapCtx.fill();
 }
 
 // === Main ===
@@ -2284,9 +2681,6 @@ function showStartScreen() {
     if(startScreenLives) startScreenLives.textContent = state.lives;
     if(startScreenLevel) startScreenLevel.textContent = state.level;
     
-    // Przełącz na zakładkę Start
-    switchTab('start');
-    
     questModal.style.display = 'flex';
     state.paused = true;
     
@@ -2308,53 +2702,6 @@ if(startGameBtn) {
   });
 }
 
-// Funkcja przełączania zakładek
-function switchTab(tabName) {
-  // Ukryj wszystkie zakładki
-  const tabContents = document.querySelectorAll('.tab-content');
-  tabContents.forEach(content => {
-    content.style.display = 'none';
-  });
-  
-  // Ukryj wszystkie przyciski zakładek
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  tabBtns.forEach(btn => {
-    btn.style.background = 'rgba(0,0,0,.2)';
-    btn.style.borderBottom = 'none';
-  });
-  
-  // Pokaż wybraną zakładkę
-  const targetContent = document.getElementById(`tabContent${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-  const targetBtn = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
-  
-  if(targetContent) {
-    targetContent.style.display = 'block';
-  }
-  if(targetBtn) {
-    targetBtn.style.background = 'rgba(100,150,255,.3)';
-    targetBtn.style.borderBottom = '2px solid rgba(100,150,255,.6)';
-  }
-  
-  // Aktualizuj quest log jeśli przełączamy na zakładkę questów
-  if(tabName === 'quests') {
-    updateQuestLog();
-  }
-}
-
-// Event listenery dla zakładek
-const tabStart = document.getElementById('tabStart');
-const tabQuests = document.getElementById('tabQuests');
-const tabHelp = document.getElementById('tabHelp');
-
-if(tabStart) {
-  tabStart.addEventListener('click', () => switchTab('start'));
-}
-if(tabQuests) {
-  tabQuests.addEventListener('click', () => switchTab('quests'));
-}
-if(tabHelp) {
-  tabHelp.addEventListener('click', () => switchTab('help'));
-}
 
 // Show start screen on game load
 showStartScreen();

@@ -8,6 +8,8 @@
 </head>
 <body>
   <canvas id="canvas"></canvas>
+  <!-- Mini-mapa w prawym górnym rogu -->
+  <canvas id="minimap" style="position:fixed; top:8px; right:8px; width:150px; height:150px; border:2px solid rgba(255,255,255,0.3); border-radius:8px; background:rgba(0,0,0,0.6); z-index:100; pointer-events:none;"></canvas>
   <div id="ui">
     <!-- Pionowy HUD po lewej stronie -->
     <div class="hud-vertical">
@@ -39,9 +41,12 @@
       </div>
       
       <div class="hud-extra-info">
-        <div class="pill" style="margin-bottom:4px;">❤️ <span id="livesDisplay">3</span></div>
-        <div class="pill" style="margin-bottom:4px;">💰 <span id="gold">0</span></div>
-        <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
+        <div class="hud-mini-item" title="Życia">❤️<span id="livesDisplay">3</span></div>
+        <div class="hud-mini-item" title="Złoto">💰<span id="gold">0</span></div>
+        <div class="hud-mini-item" title="Jabłka">🍎<span id="hudApples">0</span></div>
+        <div class="hud-mini-item" title="Mięso">🍖<span id="hudMeat">0</span></div>
+        <div class="hud-mini-item" title="Flaszki">🍾<span id="hudMead">0</span></div>
+        <div class="pill btn-icon" id="saveBtn" title="Zapisz" style="margin-top:4px;">💾</div>
       </div>
     </div>
     <footer>
@@ -104,6 +109,10 @@
           <span>💥 Siła ataku projectile</span>
           <span class="small" id="upRangedDmgValue">16</span>
         </button>
+        <button class="btn" id="upMagnet" style="justify-content:space-between; text-align:left;">
+          <span>🧲 Przyciąganie dropów</span>
+          <span class="small" id="upMagnetValue">0px</span>
+        </button>
       </div>
     </div>
   </div>
@@ -113,15 +122,8 @@
     <div class="panel">
       <button class="modal-close" aria-label="Zamknij">×</button>
       
-      <!-- Zakładki -->
-      <div style="display:flex; gap:8px; margin-bottom:20px; border-bottom:2px solid rgba(255,255,255,0.2);">
-        <button class="tab-btn" id="tabStart" data-tab="start" style="flex:1; padding:10px; background:rgba(100,150,255,.3); border-bottom:2px solid rgba(100,150,255,.6);">🏰 Start</button>
-        <button class="tab-btn" id="tabQuests" data-tab="quests" style="flex:1; padding:10px; background:rgba(0,0,0,.2);">📜 Questy</button>
-        <button class="tab-btn" id="tabHelp" data-tab="help" style="flex:1; padding:10px; background:rgba(0,0,0,.2);">❓ Pomoc</button>
-      </div>
-      
-      <!-- Zakładka Start -->
-      <div id="tabContentStart" class="tab-content" style="display:block;">
+      <!-- Sekcja Start -->
+      <div style="margin-bottom:30px;">
         <div style="text-align:center; margin-bottom:30px;">
           <h1 style="font-size:48px; margin-bottom:20px;">🏰 Chrobry RPG</h1>
           <p style="font-size:18px; margin-bottom:30px; opacity:0.9;">
@@ -238,9 +240,9 @@
         <button class="btn" id="startGameBtn" style="font-size:18px; padding:12px 24px; width:100%;">Rozpocznij grę</button>
       </div>
       
-      <!-- Zakładka Questy -->
-      <div id="tabContentQuests" class="tab-content" style="display:none;">
-        <h1 style="margin-bottom:12px;">📜 Quest Log</h1>
+      <!-- Sekcja Questy -->
+      <div style="margin-bottom:30px; border-top:2px solid rgba(255,255,255,0.2); padding-top:30px;">
+        <h2 style="font-size:20px; font-weight:700; margin-bottom:15px;">📜 Quest Log</h2>
         <div style="margin-bottom:12px">
           <!-- Quest 1: Zasadź drzewo -->
           <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
@@ -301,9 +303,9 @@
         </div>
       </div>
       
-      <!-- Zakładka Pomoc -->
-      <div id="tabContentHelp" class="tab-content" style="display:none;">
-        <h1 style="margin-bottom:12px;">❓ Zasady gry</h1>
+      <!-- Sekcja Pomoc -->
+      <div style="margin-bottom:30px; border-top:2px solid rgba(255,255,255,0.2); padding-top:30px;">
+        <h2 style="font-size:20px; font-weight:700; margin-bottom:15px;">❓ Zasady gry</h2>
         
         <div style="margin-bottom:20px;">
           <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">📱 Sterowanie (Mobile)</h2>
@@ -417,7 +419,8 @@
         <div class="pill" style="margin-bottom:8px">⚔️ CD Miecz: <span id="statsMeleeCD">0</span>ms</div>
         <div class="pill" style="margin-bottom:8px">🗡️ Siła Miecz: <span id="statsMeleeDmg">0</span></div>
         <div class="pill" style="margin-bottom:8px">🏹 CD Strzała: <span id="statsRangedCD">0</span>ms</div>
-        <div class="pill">💥 Siła Strzała: <span id="statsRangedDmg">0</span></div>
+        <div class="pill" style="margin-bottom:8px">💥 Siła Strzała: <span id="statsRangedDmg">0</span></div>
+        <div class="pill">🧲 Przyciąganie dropów: <span id="statsMagnet">0</span>px</div>
       </div>
       <button class="btn" id="closeStatsBtn">Zamknij</button>
     </div>
