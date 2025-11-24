@@ -149,13 +149,18 @@ if(state.trees.length === 0) {
 // === Collision radii ===
 const COLLIDE = { playerR: 20, enemyR: 18 };
 
-// Emoji reakcje gracza dla różnych zdarzeń
+// Emoji reakcje gracza dla różnych zdarzeń (tylko buźki, bez powtórzeń między kategoriami)
 const PLAYER_REACTIONS = {
-  pickup: ['😊', '😄', '😃', '🙂', '😁', '😋', '😍', '🤩', '😎', '😉'],
-  killEnemy: ['💪', '😤', '😏', '😈', '🔥', '⚡', '🎯', '💥', '😎', '😄'],
-  nearWoman: ['😳', '😍', '😊', '😘', '😉', '😏', '😋', '🤤', '😎', '😄'],
-  nearWizard: ['🤔', '😊', '🙂', '😃', '😄', '😎', '😉', '🤝', '😋', '😍'],
-  takeDamage: ['😢', '😰', '😓', '😞', '😟', '😔', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😤']
+  // Radosne buźki przy zbieraniu przedmiotów (bez serduszek)
+  pickup: ['😊', '😄', '😃', '🙂', '😁', '😆', '😅', '🤩', '🥳', '😋', '🤗', '😀', '😂', '🤣'],
+  // Dumne/zadowolone buźki po zabiciu wroga (bez serduszek)
+  killEnemy: ['😤', '😏', '😎', '🤓', '🤑', '🤠', '😈', '😉', '😌', '🤪', '😜', '😝', '😛', '🤨', '🧐'],
+  // Zainteresowane/zakłopotane buźki przy kobiecie (TYLKO z serduszkami: 😍🥰😘😗😙😚)
+  nearWoman: ['😳', '🤤', '😍', '🥰', '😘', '😗', '😙', '😚', '😊', '😉', '😏', '😌', '🤩', '😎', '😄', '😁', '😆', '😅', '🤗'],
+  // Myślące/przyjazne buźki przy czarodzieju (bez serduszek)
+  nearWizard: ['🤔', '🤝', '🙂', '🙃'],
+  // Smutne/przestraszone buźki przy otrzymaniu obrażeń (bez serduszek)
+  takeDamage: ['😢', '😰', '😓', '😞', '😟', '😔', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '😭', '😠', '😡', '🤬', '😱', '😨', '😥', '😪', '😵', '🥺', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤐', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '👿', '💀', '☠️']
 };
 
 // Funkcja do wywołania reakcji gracza
@@ -2224,15 +2229,22 @@ function step(dt){
     
     // Przyciąganie dropów (jak odkurzacz) - zasięg = poziom postaci + wartość z karty postaci
     const magnetRange = state.level + state.pickupMagnetRange;
-    const collectRadius = 15; // Promień zbierania - gdy przedmiot osiągnie środek gracza (około połowa emoji)
+    const collectRadius = 15; // Promień zbierania - gdy przedmiot osiągnie środek gracza
+    const baseCollectRadius = 100; // Bazowy promień zbierania (bez przyciągania, gdy magnetRange = 0)
     
-    if(magnetRange > 0 && dist > collectRadius && dist <= magnetRange) {
+    // Inicjalizuj beingPulled jeśli nie istnieje
+    if(p.beingPulled === undefined) p.beingPulled = false;
+    
+    // Przyciąganie: przedmioty w zasięgu magnetRange (ale poza promieniem zbierania) są przyciągane
+    if(magnetRange > collectRadius && dist > collectRadius && dist <= magnetRange) {
       // Oznacz pickup jako przyciągany (dla animacji)
       p.beingPulled = true;
       
       // Przyciągnij pickup do gracza - zwiększona prędkość dla lepszej animacji
       // Prędkość zależy od odległości - im bliżej, tym szybciej (efekt przyspieszenia)
-      const speedMultiplier = 1 + (1 - (dist / magnetRange)) * 2; // 1x do 3x prędkości
+      const rangeForSpeed = magnetRange - collectRadius;
+      const distInRange = dist - collectRadius;
+      const speedMultiplier = rangeForSpeed > 0 ? 1 + (1 - (distInRange / rangeForSpeed)) * 2 : 1; // 1x do 3x prędkości
       const pullSpeed = 5.0 * speedMultiplier * (dt / 16); // Zwiększona bazowa prędkość
       const pullX = (dx / dist) * pullSpeed;
       const pullY = (dy / dist) * pullSpeed;
@@ -2243,12 +2255,20 @@ function step(dt){
       const wrapped = wrapPos(p.x, p.y, state.world.width, state.world.height);
       p.x = wrapped.x;
       p.y = wrapped.y;
+      
+      // NIE zbieraj przedmiotów, które są przyciągane - wyjdź z pętli
+      continue;
     } else {
       p.beingPulled = false;
     }
     
     // Zbieranie pickupów (gdy osiągną środek gracza) - mały promień zbierania
-    if(dist < collectRadius){
+    // LUB gdy magnetRange jest za mały, zbieraj w bazowym promieniu
+    // WAŻNE: przedmioty przyciągane są pomijane (continue powyżej)
+    const shouldCollect = (magnetRange > collectRadius && dist < collectRadius) || 
+                          (magnetRange <= collectRadius && dist < baseCollectRadius);
+    
+    if(shouldCollect){
       if(p.kind==='meat'){ 
         state.inventory.meat++;
         toast('🍖 +Mięso');
@@ -2443,22 +2463,22 @@ function draw(){
     
     renderWithWrapAround(p.x, p.y, (s) => {
       // Animacja przyciągania - rysuj linię i efekt świecenia
-      if(p.beingPulled && magnetRange > 0) {
+      if(p.beingPulled === true) {
         // Oblicz odległość na ekranie
         let dx = s.x - playerScreenPos.x, dy = s.y - playerScreenPos.y;
         const screenDist = Math.hypot(dx, dy);
         
-        // Rysuj animację dla wszystkich przyciąganych przedmiotów (niezależnie od odległości na ekranie)
-        if(screenDist > 0) {
+        // Rysuj animację dla wszystkich przyciąganych przedmiotów
+        if(screenDist > 0 && screenDist < 1000) { // Ograniczenie do rozsądnej odległości na ekranie
           // Rysuj świecącą linię między graczem a przedmiotem
           ctx.save();
           // Alpha zależy od odległości - im bliżej, tym jaśniej
           const maxDist = Math.max(magnetRange * 2, 200); // Maksymalna odległość dla animacji
-          const alpha = Math.max(0.2, 1 - (screenDist / maxDist));
-          ctx.globalAlpha = alpha * 0.7; // Zwiększona widoczność
+          const alpha = Math.max(0.3, 1 - (screenDist / maxDist));
+          ctx.globalAlpha = alpha * 0.8; // Zwiększona widoczność
           ctx.strokeStyle = '#4ade80'; // Zielony kolor
-          ctx.lineWidth = 2.5; // Nieco grubsza linia
-          ctx.shadowBlur = 12;
+          ctx.lineWidth = 3; // Grubsza linia dla lepszej widoczności
+          ctx.shadowBlur = 15;
           ctx.shadowColor = '#4ade80';
           ctx.beginPath();
           ctx.moveTo(playerScreenPos.x, playerScreenPos.y);
@@ -2466,33 +2486,33 @@ function draw(){
           ctx.stroke();
           
           // Dodaj animowane cząsteczki wzdłuż linii (poruszające się w kierunku gracza)
-          const particleCount = Math.max(3, Math.floor(screenDist / 20));
+          const particleCount = Math.max(5, Math.floor(screenDist / 15));
           const timeOffset = (Date.now() % 2000) / 2000; // Animacja w pętli 2 sekundy
           for(let i = 0; i < particleCount; i++) {
             const t = ((i / particleCount) + timeOffset) % 1; // Cząsteczki poruszają się wzdłuż linii
             const px = playerScreenPos.x + dx * t;
             const py = playerScreenPos.y + dy * t;
-            ctx.globalAlpha = alpha * 0.9;
+            ctx.globalAlpha = alpha * 1.0;
             ctx.fillStyle = '#4ade80';
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 10;
             ctx.beginPath();
-            ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
             ctx.fill();
           }
           
           ctx.restore();
           
-          // Efekt świecenia wokół przyciąganego przedmiotu
+          // Efekt świecenia wokół przyciąganego przedmiotu (rysuj przed normalnym pickupem)
           ctx.save();
-          ctx.globalAlpha = alpha * 0.5;
-          ctx.shadowBlur = 20;
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.shadowBlur = 25;
           ctx.shadowColor = '#4ade80';
           ctx.fillText(emo, s.x, s.y);
           ctx.restore();
         }
       }
       
-      // Normalny pickup
+      // Normalny pickup (zawsze rysuj, nawet jeśli beingPulled)
       ctx.fillText(emo, s.x, s.y);
     });
   }
