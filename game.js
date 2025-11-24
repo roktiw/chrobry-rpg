@@ -631,6 +631,9 @@ function toggleQuestLog(){
   } else {
     state.paused = true;
     questModal.style.display = 'flex';
+    // Ukryj start screen section gdy otwieramy quest log przez Q
+    const startScreenSection = document.getElementById('startScreenSection');
+    if(startScreenSection) startScreenSection.style.display = 'none';
     updateQuestLog(); // Aktualizuj quest log przy otwieraniu
   }
 }
@@ -645,14 +648,7 @@ document.getElementById('closeQuestBtn').addEventListener('click', ()=>{
   questModal.style.display = 'none';
 });
 
-// Close button (X) for quest modal
-const questModalClose = questModal.querySelector('.modal-close');
-if(questModalClose) {
-  questModalClose.addEventListener('click', () => {
-    state.paused = false;
-    questModal.style.display = 'none';
-  });
-}
+// Close button dla quest modal - używamy closeQuestBtn na końcu modala (bez modal-close X)
 
 // Przyciski rozwijania opisów questów
 if(quest1Toggle) {
@@ -721,6 +717,47 @@ document.getElementById('invAppleClick').addEventListener('click', ()=>{
       updateInventory();
     }
   }
+});
+
+// Heal fully with apples
+document.getElementById('healWithApplesBtn').addEventListener('click', ()=>{
+  if(state.inventory.apples === 0) {
+    toast('❌ Nie masz jabłek!');
+    return;
+  }
+  
+  if(state.hp >= state.hpMax) {
+    toast('❤️ Masz już pełne zdrowie!');
+    return;
+  }
+  
+  const btn = document.getElementById('healWithApplesBtn');
+  const oldHP = state.hp;
+  const hpNeeded = state.hpMax - state.hp;
+  const applesToEat = Math.min(state.inventory.apples, hpNeeded);
+  let seedsGained = 0;
+  
+  // Animation
+  btn.style.animation = 'consumeApple 0.5s ease-in-out';
+  setTimeout(() => { btn.style.animation = ''; }, 500);
+  
+  // Eat apples
+  for(let i = 0; i < applesToEat; i++) {
+    state.inventory.apples--;
+    state.hp = clamp(state.hp + 1, 0, state.hpMax);
+    
+    // 10% chance to drop seed for each apple
+    if(Math.random() < 0.1) {
+      state.inventory.seeds++;
+      seedsGained++;
+    }
+  }
+  
+  // Update UI
+  animateBar('hp', (oldHP/state.hpMax)*100, (state.hp/state.hpMax)*100);
+  toast(`🍎 Zjedzono ${applesToEat} jabłek! +${applesToEat}HP${seedsGained > 0 ? ` 🌱 +${seedsGained} pestek` : ''}`);
+  updateInventory();
+  updateHUD();
 });
 
 // Consume meat
@@ -949,6 +986,76 @@ document.getElementById('giveMeatBtn').addEventListener('click', ()=>{
   }
 });
 
+// Daj wszystkie jabłka niewieście
+document.getElementById('giveAllApplesBtn').addEventListener('click', ()=>{
+  const needed = 50 - state.woman.givenApples;
+  if(needed <= 0) {
+    toast('✅ Masz już wszystkie wymagane jabłka!');
+    return;
+  }
+  if(state.inventory.apples === 0) {
+    toast('❌ Nie masz jabłek!');
+    return;
+  }
+  
+  const toGive = Math.min(state.inventory.apples, needed);
+  state.inventory.apples -= toGive;
+  state.woman.givenApples += toGive;
+  
+  updateWomanDialog();
+  updateHUD();
+  toast(`🍎 Dano ${toGive} jabłek!`);
+  
+  if(state.woman.givenApples >= 50 && state.woman.givenMeat >= 50) {
+    // Ukończ quest tylko przy pierwszym dziecku
+    if(!state.quests.son) {
+      state.quests.son = true;
+      toast('🎉 Ukończono quest: Spłodź syna!');
+    }
+    spawnChild();
+    // Resetuj liczniki po urodzeniu dziecka
+    state.woman.givenApples = 0;
+    state.woman.givenMeat = 0;
+    updateWomanDialog();
+    updateHUD();
+  }
+});
+
+// Daj wszystkie mięso niewieście
+document.getElementById('giveAllMeatBtn').addEventListener('click', ()=>{
+  const needed = 50 - state.woman.givenMeat;
+  if(needed <= 0) {
+    toast('✅ Masz już wszystkie wymagane mięso!');
+    return;
+  }
+  if(state.inventory.meat === 0) {
+    toast('❌ Nie masz mięsa!');
+    return;
+  }
+  
+  const toGive = Math.min(state.inventory.meat, needed);
+  state.inventory.meat -= toGive;
+  state.woman.givenMeat += toGive;
+  
+  updateWomanDialog();
+  updateHUD();
+  toast(`🍖 Dano ${toGive} mięsa!`);
+  
+  if(state.woman.givenApples >= 50 && state.woman.givenMeat >= 50) {
+    // Ukończ quest tylko przy pierwszym dziecku
+    if(!state.quests.son) {
+      state.quests.son = true;
+      toast('🎉 Ukończono quest: Spłodź syna!');
+    }
+    spawnChild();
+    // Resetuj liczniki po urodzeniu dziecka
+    state.woman.givenApples = 0;
+    state.woman.givenMeat = 0;
+    updateWomanDialog();
+    updateHUD();
+  }
+});
+
 document.getElementById('closeWomanBtn').addEventListener('click', ()=>{
   state.paused = false;
   womanModal.style.display = 'none';
@@ -1012,6 +1119,81 @@ document.getElementById('wizardGiveGoldBtn').addEventListener('click', ()=>{
     if(state.wizard.givenMeat >= 100 && state.wizard.givenApples >= 100 && state.wizard.givenGold >= 100) {
       toast('✅ Masz wszystkie zasoby! Możesz napisać książkę.');
     }
+  }
+});
+
+// Daj wszystkie mięso czarodziejowi
+document.getElementById('wizardGiveAllMeatBtn').addEventListener('click', ()=>{
+  const needed = 100 - state.wizard.givenMeat;
+  if(needed <= 0) {
+    toast('✅ Masz już wszystkie wymagane mięso!');
+    return;
+  }
+  if(state.inventory.meat === 0) {
+    toast('❌ Nie masz mięsa!');
+    return;
+  }
+  
+  const toGive = Math.min(state.inventory.meat, needed);
+  state.inventory.meat -= toGive;
+  state.wizard.givenMeat += toGive;
+  
+  updateWizardDialog();
+  updateHUD();
+  toast(`🍖 Dano ${toGive} mięsa!`);
+  
+  if(state.wizard.givenMeat >= 100 && state.wizard.givenApples >= 100 && state.wizard.givenGold >= 100) {
+    toast('✅ Masz wszystkie zasoby! Możesz napisać książkę.');
+  }
+});
+
+// Daj wszystkie jabłka czarodziejowi
+document.getElementById('wizardGiveAllApplesBtn').addEventListener('click', ()=>{
+  const needed = 100 - state.wizard.givenApples;
+  if(needed <= 0) {
+    toast('✅ Masz już wszystkie wymagane jabłka!');
+    return;
+  }
+  if(state.inventory.apples === 0) {
+    toast('❌ Nie masz jabłek!');
+    return;
+  }
+  
+  const toGive = Math.min(state.inventory.apples, needed);
+  state.inventory.apples -= toGive;
+  state.wizard.givenApples += toGive;
+  
+  updateWizardDialog();
+  updateHUD();
+  toast(`🍎 Dano ${toGive} jabłek!`);
+  
+  if(state.wizard.givenMeat >= 100 && state.wizard.givenApples >= 100 && state.wizard.givenGold >= 100) {
+    toast('✅ Masz wszystkie zasoby! Możesz napisać książkę.');
+  }
+});
+
+// Daj wszystkie monety czarodziejowi
+document.getElementById('wizardGiveAllGoldBtn').addEventListener('click', ()=>{
+  const needed = 100 - state.wizard.givenGold;
+  if(needed <= 0) {
+    toast('✅ Masz już wszystkie wymagane monety!');
+    return;
+  }
+  if(state.gold === 0) {
+    toast('❌ Nie masz monet!');
+    return;
+  }
+  
+  const toGive = Math.min(state.gold, needed);
+  state.gold -= toGive;
+  state.wizard.givenGold += toGive;
+  
+  updateWizardDialog();
+  updateHUD();
+  toast(`💰 Dano ${toGive} monet!`);
+  
+  if(state.wizard.givenMeat >= 100 && state.wizard.givenApples >= 100 && state.wizard.givenGold >= 100) {
+    toast('✅ Masz wszystkie zasoby! Możesz napisać książkę.');
   }
 });
 
@@ -1939,8 +2121,28 @@ function step(dt){
   
   // Woman NPC movement
   state.woman.t += dt;
-  state.woman.x += Math.cos(state.woman.t * 0.001 + state.woman.x * 1e-3) * 0.5;
-  state.woman.y += Math.sin(state.woman.t * 0.001 + state.woman.y * 1e-3) * 0.5;
+  
+  // Sprawdź czy gracz macha mieczem w pobliżu niewiasty
+  let dxWoman = state.woman.x - state.pos.x, dyWoman = state.woman.y - state.pos.y;
+  if(Math.abs(dxWoman) > state.world.width / 2) dxWoman = dxWoman > 0 ? dxWoman - state.world.width : dxWoman + state.world.width;
+  if(Math.abs(dyWoman) > state.world.height / 2) dyWoman = dyWoman > 0 ? dyWoman - state.world.height : dyWoman + state.world.height;
+  const distWoman = Math.hypot(dxWoman, dyWoman);
+  
+  // Jeśli gracz macha mieczem (meleeSpin aktywny) i niewiasta jest w pobliżu (promień 150px)
+  if(state.meleeSpin && distWoman < 150) {
+    // Uciekaj od gracza
+    const fleeSpeed = 1.5; // Szybkość ucieczki
+    const fleeDir = Math.hypot(dxWoman, dyWoman);
+    if(fleeDir > 0) {
+      state.woman.x += (dxWoman / fleeDir) * fleeSpeed;
+      state.woman.y += (dyWoman / fleeDir) * fleeSpeed;
+    }
+  } else {
+    // Normalny ruch (wędrowanie)
+    state.woman.x += Math.cos(state.woman.t * 0.001 + state.woman.x * 1e-3) * 0.5;
+    state.woman.y += Math.sin(state.woman.t * 0.001 + state.woman.y * 1e-3) * 0.5;
+  }
+  
   const womanWrapped = wrapPos(state.woman.x, state.woman.y, state.world.width, state.world.height);
   state.woman.x = womanWrapped.x;
   state.woman.y = womanWrapped.y;
@@ -2698,8 +2900,10 @@ function showStartScreen() {
   if(questModal && startGameBtn) {
     const startScreenLives = document.getElementById('startScreenLives');
     const startScreenLevel = document.getElementById('startScreenLevel');
+    const startScreenSection = document.getElementById('startScreenSection');
     if(startScreenLives) startScreenLives.textContent = state.lives;
     if(startScreenLevel) startScreenLevel.textContent = state.level;
+    if(startScreenSection) startScreenSection.style.display = 'block'; // Pokaż start screen
     
     questModal.style.display = 'flex';
     state.paused = true;
