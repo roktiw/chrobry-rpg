@@ -48,6 +48,7 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   // New: inventory and quests
     inventory: { apples: 0, meat: 0, seeds: 0, mead: 0, wood: 0 },
   plantingMode: false, // Mode for planting trees
+  playerReaction: { emoji: null, timer: 0 }, // Reakcja gracza (emoji + czas)
     interactionMode: false, // Mode for interacting with NPCs
   quests: { tree: false, son: false, book: false },
     lastMinuteSpawn: 0, // Timer for periodic enemy spawning (every minute)
@@ -103,6 +104,24 @@ if(state.trees.length === 0) {
 
 // === Collision radii ===
 const COLLIDE = { playerR: 20, enemyR: 18 };
+
+// Emoji reakcje gracza dla różnych zdarzeń
+const PLAYER_REACTIONS = {
+  pickup: ['😊', '😄', '😃', '🙂', '😁', '😋', '😍', '🤩', '😎', '😉'],
+  killEnemy: ['💪', '😤', '😏', '😈', '🔥', '⚡', '🎯', '💥', '😎', '😄'],
+  nearWoman: ['😳', '😍', '😊', '😘', '😉', '😏', '😋', '🤤', '😎', '😄'],
+  nearWizard: ['🤔', '😊', '🙂', '😃', '😄', '😎', '😉', '🤝', '😋', '😍']
+};
+
+// Funkcja do wywołania reakcji gracza
+function triggerPlayerReaction(type) {
+  const reactions = PLAYER_REACTIONS[type];
+  if(reactions && reactions.length > 0) {
+    const randomEmoji = reactions[Math.floor(Math.random() * reactions.length)];
+    state.playerReaction.emoji = randomEmoji;
+    state.playerReaction.timer = 3000; // 3 sekundy
+  }
+}
 
 // Enemies & pickups
 // === Enemy Definitions ===
@@ -1069,8 +1088,9 @@ function killEnemy(e){
   const dropDir2 = {x: rand(-0.8, 0.8), y: -0.5};
   spawnPickup('meat', e.x, e.y, undefined, dropDir1);
   spawnPickup('xp', e.x, e.y, Math.round(rand(10,20)), dropDir2);
-    const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
-    setTimeout(spawnEnemy, 500);
+  const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
+  triggerPlayerReaction('killEnemy'); // Reakcja na zabicie wroga
+  setTimeout(spawnEnemy, 500);
     return;
   }
   
@@ -1136,6 +1156,7 @@ function killEnemy(e){
   }
   
   // remove
+  triggerPlayerReaction('killEnemy'); // Reakcja na zabicie wroga
   const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
   // kolejny przeciwnik za chwilę
   setTimeout(spawnEnemy, 500);
@@ -1284,6 +1305,15 @@ function floatingText(msg, x,y, color){ fly.push({msg,x,y,t:800,color}); }
 // === Game loop ===
 function step(dt){
   if(state.paused) return;
+  
+  // Aktualizuj timer reakcji gracza
+  if(state.playerReaction.timer > 0) {
+    state.playerReaction.timer -= dt;
+    if(state.playerReaction.timer <= 0) {
+      state.playerReaction.emoji = null;
+      state.playerReaction.timer = 0;
+    }
+  }
 
   // WASD keyboard movement
   let moveX = 0, moveY = 0;
@@ -1766,6 +1796,32 @@ function step(dt){
   state.wizard.x = wizardWrapped.x;
   state.wizard.y = wizardWrapped.y;
   
+  // Check distance to NPCs for reactions (co 500ms)
+  const now = Date.now();
+  if(!state.lastReactionCheck) state.lastReactionCheck = { woman: 0, wizard: 0 };
+  
+  if(now - state.lastReactionCheck.woman > 500) {
+    let dxWoman = state.woman.x - state.pos.x, dyWoman = state.woman.y - state.pos.y;
+    if(Math.abs(dxWoman) > state.world.width / 2) dxWoman = dxWoman > 0 ? dxWoman - state.world.width : dxWoman + state.world.width;
+    if(Math.abs(dyWoman) > state.world.height / 2) dyWoman = dyWoman > 0 ? dyWoman - state.world.height : dyWoman + state.world.height;
+    const distWoman = Math.hypot(dxWoman, dyWoman);
+    if(distWoman < 150 && state.playerReaction.timer <= 0) {
+      triggerPlayerReaction('nearWoman');
+    }
+    state.lastReactionCheck.woman = now;
+  }
+  
+  if(now - state.lastReactionCheck.wizard > 500) {
+    let dxWizard = state.wizard.x - state.pos.x, dyWizard = state.wizard.y - state.pos.y;
+    if(Math.abs(dxWizard) > state.world.width / 2) dxWizard = dxWizard > 0 ? dxWizard - state.world.width : dxWizard + state.world.width;
+    if(Math.abs(dyWizard) > state.world.height / 2) dyWizard = dyWizard > 0 ? dyWizard - state.world.height : dyWizard + state.world.height;
+    const distWizard = Math.hypot(dxWizard, dyWizard);
+    if(distWizard < 150 && state.playerReaction.timer <= 0) {
+      triggerPlayerReaction('nearWizard');
+    }
+    state.lastReactionCheck.wizard = now;
+  }
+  
   // Children AI - follow player and attack enemies
   const currentTime = Date.now();
   for(const child of state.children) {
@@ -1944,20 +2000,28 @@ function step(dt){
     if(Math.hypot(dx, dy) < 28){
       if(p.kind==='meat'){ 
         state.inventory.meat++;
-        toast('🍖 +Mięso'); 
+        toast('🍖 +Mięso');
+        triggerPlayerReaction('pickup');
       }
       if(p.kind==='mead'){ 
         state.inventory.mead++;
-        toast('🍾 +Flaszka'); 
+        toast('🍾 +Flaszka');
+        triggerPlayerReaction('pickup');
       }
-      if(p.kind==='gold'){ state.gold += p.value||1; toast(`🪙 +${p.value||1}`); }
+      if(p.kind==='gold'){ 
+        state.gold += p.value||1; 
+        toast(`🪙 +${p.value||1}`);
+        triggerPlayerReaction('pickup');
+      }
       if(p.kind==='xp'){ 
         gainXP(p.value||10); // gainXP już ma animację
-        toast(`✨ +${p.value||10} XP`); 
+        toast(`✨ +${p.value||10} XP`);
+        triggerPlayerReaction('pickup');
       }
       if(p.kind==='apple'){ 
         state.inventory.apples++;
-        toast('🍎 +Jabłko'); 
+        toast('🍎 +Jabłko');
+        triggerPlayerReaction('pickup');
         // 10% chance to drop seed
         if(Math.random() < 0.1) {
           const seedDir = {x: state.facing.x || rand(-0.5, 0.5), y: -0.5};
@@ -1968,6 +2032,12 @@ function step(dt){
       if(p.kind==='seed') {
         state.inventory.seeds++;
         toast('🌱 +Nasiono');
+        triggerPlayerReaction('pickup');
+      }
+      if(p.kind==='wood') {
+        state.inventory.wood++;
+        toast('🪵 +Drewno');
+        triggerPlayerReaction('pickup');
       }
       state.pickups.splice(i,1); updateHUD();
     }
@@ -2173,8 +2243,8 @@ function draw(){
     });
   }
 
-  // player — mężczyzna z wąsami (używamy 🧔 jako styl moustache)
-  const heroEmoji='🧔';
+  // player — mężczyzna z wąsami (używamy 🧔 jako styl moustache) lub reakcja emoji
+  const heroEmoji = state.playerReaction.emoji || '🧔';
   const ps=worldToScreen(state.pos.x, state.pos.y); ctx.font='34px "Apple Color Emoji", "Segoe UI Emoji"'; ctx.fillText(heroEmoji, ps.x, ps.y);
 
   // miecz w wirze
@@ -2201,19 +2271,26 @@ function loop(){
 
 // Start screen functions
 function showStartScreen() {
-  if(startScreenModal && startGameBtn) {
+  if(questModal && startGameBtn) {
     const startScreenLives = document.getElementById('startScreenLives');
     const startScreenLevel = document.getElementById('startScreenLevel');
     if(startScreenLives) startScreenLives.textContent = state.lives;
     if(startScreenLevel) startScreenLevel.textContent = state.level;
-    startScreenModal.style.display = 'flex';
+    
+    // Przełącz na zakładkę Start
+    switchTab('start');
+    
+    questModal.style.display = 'flex';
     state.paused = true;
+    
+    // Aktualizuj status questów
+    updateQuestLog();
   }
 }
 
 function hideStartScreen() {
-  if(startScreenModal) {
-    startScreenModal.style.display = 'none';
+  if(questModal) {
+    questModal.style.display = 'none';
     state.paused = false;
   }
 }
@@ -2222,6 +2299,54 @@ if(startGameBtn) {
   startGameBtn.addEventListener('click', () => {
     hideStartScreen();
   });
+}
+
+// Funkcja przełączania zakładek
+function switchTab(tabName) {
+  // Ukryj wszystkie zakładki
+  const tabContents = document.querySelectorAll('.tab-content');
+  tabContents.forEach(content => {
+    content.style.display = 'none';
+  });
+  
+  // Ukryj wszystkie przyciski zakładek
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  tabBtns.forEach(btn => {
+    btn.style.background = 'rgba(0,0,0,.2)';
+    btn.style.borderBottom = 'none';
+  });
+  
+  // Pokaż wybraną zakładkę
+  const targetContent = document.getElementById(`tabContent${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+  const targetBtn = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+  
+  if(targetContent) {
+    targetContent.style.display = 'block';
+  }
+  if(targetBtn) {
+    targetBtn.style.background = 'rgba(100,150,255,.3)';
+    targetBtn.style.borderBottom = '2px solid rgba(100,150,255,.6)';
+  }
+  
+  // Aktualizuj quest log jeśli przełączamy na zakładkę questów
+  if(tabName === 'quests') {
+    updateQuestLog();
+  }
+}
+
+// Event listenery dla zakładek
+const tabStart = document.getElementById('tabStart');
+const tabQuests = document.getElementById('tabQuests');
+const tabHelp = document.getElementById('tabHelp');
+
+if(tabStart) {
+  tabStart.addEventListener('click', () => switchTab('start'));
+}
+if(tabQuests) {
+  tabQuests.addEventListener('click', () => switchTab('quests'));
+}
+if(tabHelp) {
+  tabHelp.addEventListener('click', () => switchTab('help'));
 }
 
 // Show start screen on game load

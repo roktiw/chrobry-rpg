@@ -50,7 +50,6 @@
         <div class="pill btn-icon" id="inventoryBtn" title="Inventory (E)">🎒</div>
         <div class="pill btn-icon" id="statsBtn" title="Statystyki (R)">📊</div>
         <div class="pill btn-icon" id="interactBtn" title="Interakcja (F)">💬</div>
-        <div class="pill btn-icon" id="helpBtn" title="Pomoc (?)">❓</div>
       </div>
       <div class="pill small" style="display:none;">Sterowanie: WASD/Strzałki - ruch | Spacja - atak | Kliknięcie - strzał</div>
     </footer>
@@ -109,70 +108,283 @@
     </div>
   </div>
 
-  <!-- Modal Quest Log -->
+  <!-- Modal Quest Log / Start Screen / Help (Połączony) -->
   <div class="modal" id="questModal">
     <div class="panel">
       <button class="modal-close" aria-label="Zamknij">×</button>
-      <h1>📜 Quest Log</h1>
-      <div style="margin-bottom:12px">
-        <!-- Quest 1: Zasadź drzewo -->
-        <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong style="font-size:16px;">1. Zasadź drzewo</strong>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span id="quest1Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
-              <button class="btn-icon-small" id="quest1Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
-            </div>
-          </div>
-          <div id="quest1Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
-            <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
-              🌳 Wędrując po świecie, zauważasz, że lasy są rzadkie. Zasadź swoje pierwsze drzewo, aby przywrócić naturze jej piękno. Zbierz nasiona z jabłek i użyj ich, aby zasadzić nowe drzewo na mapie.
-            </p>
-          </div>
-        </div>
-        
-        <!-- Quest 2: Spłodź syna -->
-        <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong style="font-size:16px;">2. Spłodź syna</strong>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span id="quest2Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
-              <button class="btn-icon-small" id="quest2Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
-            </div>
-          </div>
-          <div id="quest2Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
-            <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
-              👩 Spotkaj niewiastę wędrującą po świecie. Aby spłodzić z nią potomka, musisz zdobyć 50 jabłek i 50 mięsa. Pamiętaj - jest 50% szansy, że urodzi się syn lub córka!
-            </p>
-            <div class="row" style="margin-top:8px; gap:8px;">
-              <div class="pill">🍎 Jabłka: <span id="quest2Apples">0</span>/50</div>
-              <div class="pill">🍖 Mięso: <span id="quest2Meat">0</span>/50</div>
-            </div>
+      
+      <!-- Zakładki -->
+      <div style="display:flex; gap:8px; margin-bottom:20px; border-bottom:2px solid rgba(255,255,255,0.2);">
+        <button class="tab-btn" id="tabStart" data-tab="start" style="flex:1; padding:10px; background:rgba(100,150,255,.3); border-bottom:2px solid rgba(100,150,255,.6);">🏰 Start</button>
+        <button class="tab-btn" id="tabQuests" data-tab="quests" style="flex:1; padding:10px; background:rgba(0,0,0,.2);">📜 Questy</button>
+        <button class="tab-btn" id="tabHelp" data-tab="help" style="flex:1; padding:10px; background:rgba(0,0,0,.2);">❓ Pomoc</button>
+      </div>
+      
+      <!-- Zakładka Start -->
+      <div id="tabContentStart" class="tab-content" style="display:block;">
+        <div style="text-align:center; margin-bottom:30px;">
+          <h1 style="font-size:48px; margin-bottom:20px;">🏰 Chrobry RPG</h1>
+          <p style="font-size:18px; margin-bottom:30px; opacity:0.9;">
+            Walcz, zbieraj, rozwijaj się i przetrwaj w świecie pełnym niebezpieczeństw!
+          </p>
+          <div style="margin-bottom:30px;">
+            <div class="pill" style="margin-bottom:8px; display:inline-block;">❤️ Życia: <span id="startScreenLives">3</span></div>
+            <div class="pill" style="margin-bottom:8px; display:inline-block; margin-left:8px;">⭐ Poziom: <span id="startScreenLevel">1</span></div>
           </div>
         </div>
         
-        <!-- Quest 3: Napisz książkę -->
-        <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <strong style="font-size:16px;">3. Napisz książkę</strong>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span id="quest3Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
-              <button class="btn-icon-small" id="quest3Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+        <!-- Status Questów -->
+        <div style="margin-bottom:30px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:15px; background:rgba(0,0,0,0.2);">
+          <h2 style="font-size:20px; font-weight:700; margin-bottom:15px; text-align:center;">📜 Status Questów</h2>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px;">
+              <strong style="font-size:15px;">1. Zasadź drzewo</strong>
+              <span id="startQuest1Status" style="font-weight:600; font-size:14px;">Nierozpoczęty</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px;">
+              <strong style="font-size:15px;">2. Spłodź syna</strong>
+              <span id="startQuest2Status" style="font-weight:600; font-size:14px;">Nierozpoczęty</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:rgba(0,0,0,0.3); border-radius:6px;">
+              <strong style="font-size:15px;">3. Napisz książkę</strong>
+              <span id="startQuest3Status" style="font-weight:600; font-size:14px;">Nierozpoczęty</span>
             </div>
           </div>
-          <div id="quest3Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
-            <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
-              🧙 Spotkaj czarodzieja wędrującego po świecie. Aby napisać z nim książkę, musisz zebrać ogromne ilości zasobów: 100 mięsa, 100 jabłek i 100 monet. To będzie wymagało wiele wysiłku, ale nagroda jest warta poświęcenia!
-            </p>
-            <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
-              <div class="pill">🍖 Mięso: <span id="quest3Meat">0</span>/100</div>
-              <div class="pill">🍎 Jabłka: <span id="quest3Apples">0</span>/100</div>
-              <div class="pill">💰 Monety: <span id="quest3Gold">0</span>/100</div>
+        </div>
+        
+        <!-- Instrukcje -->
+        <div style="margin-bottom:30px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:15px; background:rgba(0,0,0,0.2);">
+          <h2 style="font-size:20px; font-weight:700; margin-bottom:15px; text-align:center;">🎮 Jak grać</h2>
+          
+          <div style="margin-bottom:20px;">
+            <h3 style="font-size:16px; font-weight:700; margin-bottom:10px; margin-top:12px;">📱 Sterowanie (Mobile)</h3>
+            <div style="display:flex; flex-direction:column; gap:6px; font-size:13px;">
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>🎮 Gałka analogowa</strong> (lewy dolny róg) - poruszanie się
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>⚔️ Przycisk A</strong> (prawy dolny róg) - atak mieczem
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>🏹 Przycisk B</strong> (prawy dolny róg) - atak łukiem
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>📜 Questy</strong> - przycisk w górnym menu
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>🎒 Inventory</strong> - przycisk w górnym menu
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>📊 Statystyki</strong> - przycisk w górnym menu
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>💬 Interakcja</strong> - przycisk w górnym menu (aktywuj, potem kliknij NPC)
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:20px;">
+            <h3 style="font-size:16px; font-weight:700; margin-bottom:10px; margin-top:12px;">🖥️ Sterowanie (Desktop)</h3>
+            <div style="display:flex; flex-direction:column; gap:6px; font-size:13px;">
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>WASD / Strzałki</strong> - poruszanie się
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>Spacja</strong> - atak mieczem
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>Kliknięcie myszką</strong> - atak łukiem w kierunku kursora
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>Q</strong> - Questy
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>E</strong> - Inventory
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>R</strong> - Statystyki
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>F</strong> - Tryb interakcji (potem kliknij NPC)
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>ESC</strong> - Zamknij otwarte okno
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:20px;">
+            <h3 style="font-size:16px; font-weight:700; margin-bottom:10px; margin-top:12px;">🎮 Mechaniki gry</h3>
+            <div style="display:flex; flex-direction:column; gap:6px; font-size:13px;">
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>🏰 Jaskinie</strong> - generują wrogów, dropują złoto i przedmioty po zniszczeniu
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>🌳 Drzewa</strong> - dropują jabłka, można je ścinać dla drewna
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>👩 Niewiasta</strong> - daj 50 jabłek i 50 mięsa aby spłodzić dziecko
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>🧙 Czarodziej</strong> - daj 100 mięsa, 100 jabłek i 100 monet aby napisać książkę
+              </div>
+              <div class="pill" style="text-align:left; padding:8px 12px;">
+                <strong>❤️ Życia</strong> - startujesz z 3, dostajesz +1 za każdy level up
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <button class="btn" id="startGameBtn" style="font-size:18px; padding:12px 24px; width:100%;">Rozpocznij grę</button>
+      </div>
+      
+      <!-- Zakładka Questy -->
+      <div id="tabContentQuests" class="tab-content" style="display:none;">
+        <h1 style="margin-bottom:12px;">📜 Quest Log</h1>
+        <div style="margin-bottom:12px">
+          <!-- Quest 1: Zasadź drzewo -->
+          <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:16px;">1. Zasadź drzewo</strong>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span id="quest1Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
+                <button class="btn-icon-small" id="quest1Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+              </div>
+            </div>
+            <div id="quest1Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+              <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
+                🌳 Wędrując po świecie, zauważasz, że lasy są rzadkie. Zasadź swoje pierwsze drzewo, aby przywrócić naturze jej piękno. Zbierz nasiona z jabłek i użyj ich, aby zasadzić nowe drzewo na mapie.
+              </p>
+            </div>
+          </div>
+          
+          <!-- Quest 2: Spłodź syna -->
+          <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:16px;">2. Spłodź syna</strong>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span id="quest2Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
+                <button class="btn-icon-small" id="quest2Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+              </div>
+            </div>
+            <div id="quest2Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+              <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
+                👩 Spotkaj niewiastę wędrującą po świecie. Aby spłodzić z nią potomka, musisz zdobyć 50 jabłek i 50 mięsa. Pamiętaj - jest 50% szansy, że urodzi się syn lub córka!
+              </p>
+              <div class="row" style="margin-top:8px; gap:8px;">
+                <div class="pill">🍎 Jabłka: <span id="quest2Apples">0</span>/50</div>
+                <div class="pill">🍖 Mięso: <span id="quest2Meat">0</span>/50</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Quest 3: Napisz książkę -->
+          <div style="margin-bottom:12px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:10px; background:rgba(0,0,0,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:16px;">3. Napisz książkę</strong>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span id="quest3Status" style="color:#4ade80; font-weight:600;">✓ Ukończone</span>
+                <button class="btn-icon-small" id="quest3Toggle" style="font-size:18px; padding:2px 6px;" title="Rozwiń/Zwiń opis (V)">▼</button>
+              </div>
+            </div>
+            <div id="quest3Description" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);">
+              <p style="margin:0 0 8px 0; line-height:1.5; color:rgba(255,255,255,0.9);">
+                🧙 Spotkaj czarodzieja wędrującego po świecie. Aby napisać z nim książkę, musisz zebrać ogromne ilości zasobów: 100 mięsa, 100 jabłek i 100 monet. To będzie wymagało wiele wysiłku, ale nagroda jest warta poświęcenia!
+              </p>
+              <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+                <div class="pill">🍖 Mięso: <span id="quest3Meat">0</span>/100</div>
+                <div class="pill">🍎 Jabłka: <span id="quest3Apples">0</span>/100</div>
+                <div class="pill">💰 Monety: <span id="quest3Gold">0</span>/100</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <button class="btn" id="closeQuestBtn">Zamknij</button>
+      
+      <!-- Zakładka Pomoc -->
+      <div id="tabContentHelp" class="tab-content" style="display:none;">
+        <h1 style="margin-bottom:12px;">❓ Zasady gry</h1>
+        
+        <div style="margin-bottom:20px;">
+          <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">📱 Sterowanie (Mobile)</h2>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>🎮 Gałka analogowa</strong> (lewy dolny róg) - poruszanie się
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>⚔️ Przycisk A</strong> (prawy dolny róg) - atak mieczem
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>🏹 Przycisk B</strong> (prawy dolny róg) - atak łukiem
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>📜 Questy</strong> - przycisk w górnym menu
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>🎒 Inventory</strong> - przycisk w górnym menu
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>📊 Statystyki</strong> - przycisk w górnym menu
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>💬 Interakcja</strong> - przycisk w górnym menu (aktywuj, potem kliknij NPC)
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">🖥️ Sterowanie (Desktop)</h2>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>WASD / Strzałki</strong> - poruszanie się
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>Spacja</strong> - atak mieczem
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>Kliknięcie myszką</strong> - atak łukiem w kierunku kursora
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>Q</strong> - Questy
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>E</strong> - Inventory
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>R</strong> - Statystyki
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>F</strong> - Tryb interakcji (potem kliknij NPC)
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>ESC</strong> - Zamknij otwarte okno
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">🎮 Mechaniki gry</h2>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>🏰 Jaskinie</strong> - generują wrogów, dropują złoto i przedmioty po zniszczeniu
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>🌳 Drzewa</strong> - dropują jabłka, można je ścinać dla drewna
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>👩 Niewiasta</strong> - daj 50 jabłek i 50 mięsa aby spłodzić dziecko
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>🧙 Czarodziej</strong> - daj 100 mięsa, 100 jabłek i 100 monet aby napisać książkę
+            </div>
+            <div class="pill" style="text-align:left; padding:10px 14px;">
+              <strong>❤️ Życia</strong> - startujesz z 3, dostajesz +1 za każdy level up
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <button class="btn" id="closeQuestBtn" style="width:100%; margin-top:12px;">Zamknij</button>
     </div>
   </div>
 
@@ -253,114 +465,6 @@
   </div>
 
   <!-- Modal Start Screen -->
-  <div class="modal" id="startScreenModal">
-    <div class="panel" style="text-align:center; max-width:500px;">
-      <button class="modal-close" aria-label="Zamknij" style="display:none;">×</button>
-      <h1 style="font-size:48px; margin-bottom:20px;">🏰 Chrobry RPG</h1>
-      <p style="font-size:18px; margin-bottom:30px; opacity:0.9;">
-        Walcz, zbieraj, rozwijaj się i przetrwaj w świecie pełnym niebezpieczeństw!
-      </p>
-      <div style="margin-bottom:30px;">
-        <div class="pill" style="margin-bottom:8px; display:inline-block;">❤️ Życia: <span id="startScreenLives">3</span></div>
-        <div class="pill" style="margin-bottom:8px; display:inline-block; margin-left:8px;">⭐ Poziom: <span id="startScreenLevel">1</span></div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:12px; align-items:stretch;">
-        <button class="btn" id="startGameBtn" style="font-size:18px; padding:12px 24px;">Rozpocznij grę</button>
-        <button class="btn" id="startScreenHelpBtn" style="font-size:16px; padding:10px 20px; background:rgba(100,150,255,.2); border-color:rgba(100,150,255,.4);">❓ Zasady gry</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Help / Zasady gry -->
-  <div class="modal" id="helpModal">
-    <div class="panel">
-      <button class="modal-close" aria-label="Zamknij">×</button>
-      <h1>❓ Zasady gry</h1>
-      
-      <div style="margin-bottom:20px;">
-        <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">📱 Sterowanie (Mobile)</h2>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>🎮 Gałka analogowa</strong> (lewy dolny róg) - poruszanie się
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>⚔️ Przycisk A</strong> (prawy dolny róg) - atak mieczem
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>🏹 Przycisk B</strong> (prawy dolny róg) - atak łukiem
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>📜 Questy</strong> - przycisk w górnym menu
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>🎒 Inventory</strong> - przycisk w górnym menu
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>📊 Statystyki</strong> - przycisk w górnym menu
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>💬 Interakcja</strong> - przycisk w górnym menu (aktywuj, potem kliknij NPC)
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-bottom:20px;">
-        <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">🖥️ Sterowanie (Desktop)</h2>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>WASD / Strzałki</strong> - poruszanie się
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>Spacja</strong> - atak mieczem
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>Kliknięcie myszką</strong> - atak łukiem w kierunku kursora
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>Q</strong> - Questy
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>E</strong> - Inventory
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>R</strong> - Statystyki
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>F</strong> - Tryb interakcji (potem kliknij NPC)
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>?</strong> - Pomoc (ten ekran)
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>ESC</strong> - Zamknij otwarte okno
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-bottom:20px;">
-        <h2 style="font-size:18px; font-weight:700; margin-bottom:12px; margin-top:16px;">🎮 Mechaniki gry</h2>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>🏰 Jaskinie</strong> - generują wrogów, dropują złoto i przedmioty po zniszczeniu
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>🌳 Drzewa</strong> - dropują jabłka, można je ścinać dla drewna
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>👩 Niewiasta</strong> - daj 50 jabłek i 50 mięsa aby spłodzić dziecko
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>🧙 Czarodziej</strong> - daj 100 mięsa, 100 jabłek i 100 monet aby napisać książkę
-          </div>
-          <div class="pill" style="text-align:left; padding:10px 14px;">
-            <strong>❤️ Życia</strong> - startujesz z 3, dostajesz +1 za każdy level up
-          </div>
-        </div>
-      </div>
-
-      <button class="btn" id="closeHelpBtn" style="width:100%; margin-top:8px;">Zamknij</button>
-    </div>
-  </div>
 
   <script src="game.js"></script>
 </body>
