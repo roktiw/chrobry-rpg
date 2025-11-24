@@ -9,11 +9,11 @@
 <body>
   <canvas id="canvas"></canvas>
   <!-- Mini-mapa w prawym górnym rogu -->
-  <canvas id="minimap" style="position:fixed; top:8px; right:8px; width:150px; height:150px; border:2px solid rgba(255,255,255,0.3); border-radius:8px; background:rgba(0,0,0,0.6); z-index:100; pointer-events:none;"></canvas>
+  <canvas id="minimap" class="minimap"></canvas>
   <div id="ui">
     <!-- Pionowy HUD po lewej stronie -->
     <div class="hud-vertical">
-      <div class="pill" style="margin-bottom:8px; text-align:center; font-weight:700;">🏰 <strong>Chrobry</strong></div>
+      <div class="pill hud-title">🏰 <strong>Chrobry</strong></div>
       
       <div class="hud-stat-item">
         <div class="hud-stat-header">
@@ -37,7 +37,7 @@
           <span class="small">L<span id="lvlNum">1</span></span>
         </div>
         <div class="bar purple"><div id="xpFill" style="width:0%"></div></div>
-        <div class="small" style="text-align:center; margin-top:2px;" id="xpNum">0/100</div>
+        <div class="small" style="text-align:center; margin-top:1px; font-size:8px;" id="xpNum">0/100</div>
       </div>
       
       <div class="hud-extra-info">
