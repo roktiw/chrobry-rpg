@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Chrobry RPG — emoji</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="ui">
+    <header>
+      <div class="hud-compact">
+        <div class="pill" style="flex-shrink:0">🏰 <strong>Chrobry</strong></div>
+        <div class="hud-stats">
+          <div class="pill" style="min-width:0; flex:1">
+            <span>❤️</span>
+            <div class="bar" style="margin-left:4px; margin-right:4px"><div id="hpFill" style="width:100%"></div></div>
+            <span id="hpNum" class="small">0/0</span>
+          </div>
+          <div class="pill" style="min-width:0; flex:1">
+            <span>🔷</span>
+            <div class="bar blue" style="margin-left:4px; margin-right:4px"><div id="mpFill" style="width:100%"></div></div>
+            <span id="mpNum" class="small">0/0</span>
+          </div>
+          <div class="pill" style="min-width:0; flex:1">
+            <span>⭐</span>
+            <div class="bar purple" style="margin-left:4px; margin-right:4px"><div id="xpFill" style="width:0%"></div></div>
+            <span id="xpNum" class="small">0/100</span>
+            <span class="small" style="margin-left:4px">L<span id="lvlNum">1</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="mobile-buttons">
+        <div class="pill">💰 <span id="gold">0</span></div>
+        <div class="pill btn-icon" id="questBtn" title="Questy (Q)">📜</div>
+        <div class="pill btn-icon" id="inventoryBtn" title="Inventory (E)">🎒</div>
+        <div class="pill btn-icon" id="statsBtn" title="Statystyki (R)">📊</div>
+        <div class="pill btn-icon" id="saveBtn" title="Zapisz">💾</div>
+      </div>
+    </header>
+    <footer>
+      <div class="pill small">Sterowanie: WASD/Strzałki - ruch | Spacja - atak | Kliknięcie - strzał</div>
+    </footer>
+  </div>
+
+  <!-- Modal level-up -->
+  <div class="modal" id="levelUpModal">
+    <div class="panel">
+      <h1>🛡️ Awans na poziom <span id="lvlUpTo">2</span></h1>
+      <div class="pill" style="margin-bottom:16px; font-size:16px; font-weight:bold; background:rgba(76,222,128,0.2); border-color:rgba(76,222,128,0.4);">
+        ⭐ Punkty do wykorzystania: <span id="levelUpPoints">1</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn" id="upHP" style="justify-content:space-between; text-align:left;">
+          <span>❤️ Maks. HP</span>
+          <span class="small" id="upHPValue">100</span>
+        </button>
+        <button class="btn" id="upMP" style="justify-content:space-between; text-align:left;">
+          <span>🔷 Maks. Mana</span>
+          <span class="small" id="upMPValue">50</span>
+        </button>
+        <button class="btn" id="upSpeed" style="justify-content:space-between; text-align:left;">
+          <span>🏃 Prędkość ruchu</span>
+          <span class="small" id="upSpeedValue">2.8</span>
+        </button>
+        <button class="btn" id="upMeleeSpeed" style="justify-content:space-between; text-align:left;">
+          <span>⚔️ Prędkość ataku wręcz</span>
+          <span class="small" id="upMeleeSpeedValue">400ms</span>
+        </button>
+        <button class="btn" id="upMeleeDmg" style="justify-content:space-between; text-align:left;">
+          <span>🗡️ Siła ataku wręcz</span>
+          <span class="small" id="upMeleeDmgValue">18</span>
+        </button>
+        <button class="btn" id="upRangedSpeed" style="justify-content:space-between; text-align:left;">
+          <span>🏹 Prędkość ataku projectile</span>
+          <span class="small" id="upRangedSpeedValue">300ms</span>
+        </button>
+        <button class="btn" id="upRangedDmg" style="justify-content:space-between; text-align:left;">
+          <span>💥 Siła ataku projectile</span>
+          <span class="small" id="upRangedDmgValue">16</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Quest Log -->
+  <div class="modal" id="questModal">
+    <div class="panel">
+      <h1>📜 Quest Log</h1>
+      <div style="margin-bottom:12px">
+        <div class="pill" style="margin-bottom:8px">
+          <strong>1. Zasadź drzewo</strong>
+          <span id="quest1Status" style="margin-left:8px; color:#4ade80">✓ Ukończone</span>
+        </div>
+        <div class="pill" style="margin-bottom:8px">
+          <strong>2. Spłodź syna</strong>
+          <span id="quest2Status" style="margin-left:8px; color:#4ade80">✓ Ukończone</span>
+        </div>
+        <div class="pill">
+          <strong>3. Napisz książkę</strong>
+          <span id="quest3Status" style="margin-left:8px; color:#4ade80">✓ Ukończone</span>
+        </div>
+      </div>
+      <button class="btn" id="closeQuestBtn">Zamknij</button>
+    </div>
+  </div>
+
+  <!-- Modal Inventory -->
+  <div class="modal" id="inventoryModal">
+    <div class="panel">
+      <h1>🎒 Inventory</h1>
+      <div style="margin-bottom:12px">
+        <div class="pill" style="margin-bottom:8px; cursor:pointer" id="invAppleClick">🍎 Jabłka: <span id="invApples">0</span> (kliknij aby zjeść)</div>
+        <div class="pill" style="margin-bottom:8px; cursor:pointer" id="invMeatClick">🍖 Mięso: <span id="invMeat">0</span> (kliknij aby zjeść)</div>
+        <div class="pill" style="margin-bottom:8px; cursor:pointer" id="invMeadClick">🍾 Flaszka: <span id="invMead">0</span> (kliknij aby wypić)</div>
+        <div class="pill" style="cursor:pointer" id="invSeedClick">🌱 Nasiona: <span id="invSeeds">0</span> (kliknij aby aktywować zasadzanie)</div>
+      </div>
+      <div id="plantingModeIndicator" style="margin-bottom:12px; display:none; color:#4ade80; font-weight:bold">🌱 Tryb zasadzania aktywny - kliknij na mapie aby zasadzić drzewo</div>
+      <button class="btn" id="closeInventoryBtn">Zamknij</button>
+    </div>
+  </div>
+
+  <!-- Modal Character Stats -->
+  <div class="modal" id="statsModal">
+    <div class="panel">
+      <h1>📊 Karta Postaci</h1>
+      <div style="margin-bottom:12px">
+        <div class="pill" style="margin-bottom:8px">❤️ HP: <span id="statsHP">0</span>/<span id="statsHPMax">0</span></div>
+        <div class="pill" style="margin-bottom:8px">🔷 Mana: <span id="statsMP">0</span>/<span id="statsMPMax">0</span></div>
+        <div class="pill" style="margin-bottom:8px">⭐ Poziom: <span id="statsLevel">1</span></div>
+        <div class="pill" style="margin-bottom:8px">🏃 Prędkość: <span id="statsSpeed">0</span></div>
+        <div class="pill" style="margin-bottom:8px">⚔️ CD Miecz: <span id="statsMeleeCD">0</span>ms</div>
+        <div class="pill" style="margin-bottom:8px">🗡️ Siła Miecz: <span id="statsMeleeDmg">0</span></div>
+        <div class="pill" style="margin-bottom:8px">🏹 CD Strzała: <span id="statsRangedCD">0</span>ms</div>
+        <div class="pill">💥 Siła Strzała: <span id="statsRangedDmg">0</span></div>
+      </div>
+      <button class="btn" id="closeStatsBtn">Zamknij</button>
+    </div>
+  </div>
+
+  <!-- Modal Woman Dialog -->
+  <div class="modal" id="womanModal">
+    <div class="panel">
+      <h1>👩 Kobieta</h1>
+      <p style="margin:12px 0">Aby spłodzić syna, musisz mi dać 50 jabłek i 50 mięsa.</p>
+      <div class="row" style="margin:12px 0">
+        <div class="pill">🍎 Jabłka: <span id="womanApples">0</span>/50</div>
+        <div class="pill">🍖 Mięso: <span id="womanMeat">0</span>/50</div>
+      </div>
+      <div class="row">
+        <button class="btn" id="giveAppleBtn">🍎 Daj jabłko (1)</button>
+        <button class="btn" id="giveMeatBtn">🍖 Daj mięso (1)</button>
+        <button class="btn" id="closeWomanBtn">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Wizard Dialog -->
+  <div class="modal" id="wizardModal">
+    <div class="panel">
+      <h1>🧙 Czarodziej</h1>
+      <p style="margin:12px 0">Aby napisać książkę, potrzebuję 100 mięsa, 100 jabłek i 100 monet.</p>
+      <div class="row" style="margin:12px 0">
+        <div class="pill">🍖 Mięso: <span id="wizardMeat">0</span>/100</div>
+        <div class="pill">🍎 Jabłka: <span id="wizardApples">0</span>/100</div>
+        <div class="pill">💰 Monety: <span id="wizardGold">0</span>/100</div>
+      </div>
+      <div class="row">
+        <button class="btn" id="wizardGiveMeatBtn">🍖 Daj mięso (1)</button>
+        <button class="btn" id="wizardGiveAppleBtn">🍎 Daj jabłko (1)</button>
+        <button class="btn" id="wizardGiveGoldBtn">💰 Daj monetę (1)</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="wizardCompleteBtn">📖 Napisz książkę</button>
+        <button class="btn" id="closeWizardBtn">Zamknij</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
+
