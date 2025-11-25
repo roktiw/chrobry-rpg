@@ -989,8 +989,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 /* === Panel przycisków akcji - nad przyciskami ataku (mobile) === */
 .action-buttons-panel {
   position: fixed;
-  /* Na mobile: wyżej nad przyciskami ataku (bottom: 12px + 56px + 16px gap + 56px + 20px dodatkowy odstęp = 160px) */
-  bottom: max(160px, calc(env(safe-area-inset-bottom) + 160px));
+  /* Na mobile: wyżej nad przyciskami ataku (bottom: 20px + 56px + 16px gap + 56px + 20px dodatkowy odstęp = 168px) */
+  bottom: max(168px, calc(env(safe-area-inset-bottom) + 168px));
   right: max(12px, calc(env(safe-area-inset-right) + 8px));
   z-index: 200;
   pointer-events: auto;
@@ -1090,8 +1090,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 /* Gałka analogowa - lewy dolny róg */
 .virtual-joystick {
   position: fixed;
-  left: max(12px, env(safe-area-inset-left)); /* Safe area */
-  bottom: max(12px, env(safe-area-inset-bottom)); /* Safe area dla home indicator */
+  left: max(12px, calc(env(safe-area-inset-left) + 8px)); /* Safe area */
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 12px)); /* Zwiększony margines dla home indicator */
   width: 100px;
   height: 100px;
   pointer-events: auto;
@@ -1143,8 +1143,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 /* Przyciski akcji - prawy dolny róg */
 .action-buttons {
   position: fixed;
-  right: max(12px, env(safe-area-inset-right)); /* Safe area */
-  bottom: max(12px, env(safe-area-inset-bottom)); /* Safe area dla home indicator */
+  right: max(12px, calc(env(safe-area-inset-right) + 8px)); /* Safe area */
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 12px)); /* Zwiększony margines dla home indicator */
   display: none; /* Ukryj na desktop */
   flex-direction: column;
   gap: 16px; /* Większy gap dla lepszej dostępności */
