@@ -500,6 +500,11 @@ addEventListener('keydown', (e)=>{
     e.preventDefault();
     toggleInteractionMode();
   }
+  if(e.key.toLowerCase() === 'n') {
+    e.preventDefault();
+    // Strzał projectile na desktopie (bez targetu - strzela w kierunku kursora)
+    fireArrow(null);
+  }
   if(e.key === '?' || e.key === '/') {
     e.preventDefault();
     toggleHelp();
@@ -535,7 +540,11 @@ addEventListener('keydown', (e)=>{
       helpModal.style.display = 'none';
       state.paused = false;
     }
-    // Level up modal nie zamyka się przez Escape (musi użyć punktów)
+    // Level up modal można zamknąć przez Escape (punkty pozostają)
+    if(levelUpModal && levelUpModal.style.display === 'flex') {
+      closeLevelUp();
+      return;
+    }
     // Start screen nie zamyka się przez Escape
   }
 });
@@ -1417,10 +1426,13 @@ function spawnPickup(kind, x, y, value, direction){
     bounceCount = 0;
   }
   
-  // Use provided value, or generate from spec, or default to 1
+  // Use provided value, or default to 1 (zawsze 1 dla mięsiwa, jabłek, etc.)
   let finalValue = value;
   if(finalValue === undefined || finalValue === null) {
-    if(spec.value) {
+    // Dla mięsiwa, jabłek, flaszek, ziaren zawsze 1
+    if(kind === 'meat' || kind === 'apple' || kind === 'mead' || kind === 'seed') {
+      finalValue = 1;
+    } else if(spec.value) {
       if(Array.isArray(spec.value)) {
         finalValue = Math.round(rand(spec.value[0], spec.value[1]));
       } else {
@@ -1477,17 +1489,20 @@ function handleNestDestroyed(nest) {
   // Aktualizuj licznik zniszczonych legowisk per typ
   if(nest.type >= 0 && nest.type < state.nestsDestroyedByType.length) {
     state.nestsDestroyedByType[nest.type]++;
+    const destroyedCount = state.nestsDestroyedByType[nest.type];
     
-    // Sprawdź czy powinna się pojawić megabestia (po 3 zniszczonych legowiskach danego typu)
-    if(state.nestsDestroyedByType[nest.type] >= 3 && 
-       !state.megabeasts.some(mb => mb.type === nest.type)) {
-      spawnMegabeast(nest.type, nest.x, nest.y);
+    // Zawsze spawnuj normalną megabestię przy zniszczeniu legowiska
+    spawnMegabeast(nest.type, nest.x, nest.y, false);
+    
+    // Spawnuj ultra megabestię co 3 zniszczone legowiska (3, 6, 9, 12...)
+    if(destroyedCount % 3 === 0) {
+      spawnMegabeast(nest.type, nest.x, nest.y, true);
     }
   }
 }
 
 // Funkcja do spawnu megabestii
-function spawnMegabeast(enemyTypeIndex, nearX, nearY) {
+function spawnMegabeast(enemyTypeIndex, nearX, nearY, isUltra = false) {
   const enemyDef = ENEMIES[enemyTypeIndex];
   if(!enemyDef) return;
   
@@ -1497,8 +1512,9 @@ function spawnMegabeast(enemyTypeIndex, nearX, nearY) {
   const mx = (nearX + Math.cos(ang)*dist + state.world.width) % state.world.width;
   const my = (nearY + Math.sin(ang)*dist + state.world.height) % state.world.height;
   
-  // Megabestia ma 3x więcej HP niż normalny potwór
-  const hpMax = enemyDef.hp * 3;
+  // HP: normalna megabestia = 10x, ultra megabestia = 20x
+  const hpMultiplier = isUltra ? 20 : 10;
+  const hpMax = enemyDef.hp * hpMultiplier;
   
   state.megabeasts.push({
     type: enemyTypeIndex,
@@ -1506,18 +1522,47 @@ function spawnMegabeast(enemyTypeIndex, nearX, nearY) {
     y: my,
     hp: hpMax,
     hpMax: hpMax,
-    id: Math.random().toString(36).slice(2)
+    id: Math.random().toString(36).slice(2),
+    isUltra: isUltra, // Flaga ultra megabestii
+    // Pola dla AI i ataków
+    state: 'idle', // 'idle', 'chasing', 'preparing', 'attacking', 'recovering', 'special'
+    attackTimer: 0,
+    attackCooldown: 0,
+    projectileTimer: 0,
+    projectileCooldown: 0,
+    chargeDirection: {x: 0, y: 0},
+    chargeSpeed: 0,
+    t: 0, // Timer dla animacji
+    minionSpawnTimer: 0, // Dla trupa - spawn minionów
+    phase: 0, // Faza ataku (0-3)
+    warningTimer: 0, // Timer dla sygnałów ostrzegawczych
+    teleportTimer: 0, // Dla żmii - teleport
+    dashCooldown: 0 // Dla wilka - dash cooldown
   });
   
   const enemyNames = ['Wilk', 'Dzika świnia', 'Żmija', 'Trup'];
   const enemyName = enemyNames[enemyTypeIndex] || 'Potwór';
-  toast(`⚠️ MEGABESTIA ${enemyDef.emoji} ${enemyName} pojawiła się!`);
+  const prefix = isUltra ? '💀 ULTRA MEGA' : '⚠️ MEGA';
+  toast(`${prefix} ${enemyDef.emoji} ${enemyName} pojawiła się!`);
 }
 
 function spawnInitial(){
   // Spawn nests for each enemy type
   for(let i = 0; i < ENEMIES.length; i++) {
     spawnNest(i);
+  }
+  
+  // Spawn 3 startowe jabłonki niedaleko domu
+  for(let i = 0; i < 3; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 150 + Math.random() * 100; // 150-250 pikseli od domu
+    const treeX = state.home.x + Math.cos(ang) * dist;
+    const treeY = state.home.y + Math.sin(ang) * dist;
+    state.trees.push({
+      x: treeX,
+      y: treeY,
+      size: 2.5
+    });
   }
   
   for(let i=0;i<28;i++) spawnEnemy();
@@ -1554,9 +1599,22 @@ function fireArrow(target){
     if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
     ax = dx; ay = dy;
   } else {
-    // use facing direction
-    ax = state.facing.x;
-    ay = state.facing.y;
+    // use facing direction (lub kierunek kursora na desktopie)
+    if(pointer && pointer.x !== undefined && pointer.y !== undefined && mousePos && mousePos.x !== undefined) {
+      // Użyj kierunku kursora na desktopie
+      const worldPos = screenToWorld(mousePos.x, mousePos.y);
+      ax = worldPos.x - state.pos.x;
+      ay = worldPos.y - state.pos.y;
+      // Handle wrap-around
+      let dx = ax, dy = ay;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      ax = dx; ay = dy;
+    } else {
+      // Fallback - use facing direction
+      ax = state.facing.x;
+      ay = state.facing.y;
+    }
   }
   const len = Math.hypot(ax, ay) || 1; 
   const vx = (ax/len)*6.0; 
@@ -1752,9 +1810,10 @@ function spendLevelUpPoint() {
   if(state.levelUpPoints > 0) {
     state.levelUpPoints--;
     updateLevelUpModal();
-    if(state.levelUpPoints <= 0) {
-      closeLevelUp();
-    }
+    // USUNIĘTE: auto-zamykanie gdy punkty = 0 - można zamknąć i wrócić później
+    // if(state.levelUpPoints <= 0) {
+    //   closeLevelUp();
+    // }
   }
 }
 
@@ -1823,13 +1882,166 @@ function closeLevelUp(){
   updateHUD(); 
 }
 
-// Close button (X) for level up modal (tylko jeśli nie ma punktów do wykorzystania)
+// Close button (X) for level up modal - zawsze zamyka (punkty pozostają)
 const levelUpModalClose = levelUpModal.querySelector('.modal-close');
 if(levelUpModalClose) {
   levelUpModalClose.addEventListener('click', () => {
-    if(state.levelUpPoints <= 0) {
-      closeLevelUp();
+    closeLevelUp(); // Zawsze zamyka, punkty pozostają
+  });
+}
+
+// === Developer Menu ===
+const devMenuModal = document.getElementById('devMenuModal');
+let devMenuOpen = false;
+
+// Toggle dev menu with J key
+addEventListener('keydown', (e) => {
+  if(e.key.toLowerCase() === 'j' && !state.paused) {
+    if(!devMenuOpen) {
+      devMenuOpen = true;
+      state.paused = true;
+      devMenuModal.style.display = 'flex';
+    } else {
+      devMenuOpen = false;
+      state.paused = false;
+      devMenuModal.style.display = 'none';
     }
+  }
+});
+
+// Close button
+if(devMenuModal) {
+  const devMenuClose = devMenuModal.querySelector('.modal-close');
+  if(devMenuClose) {
+    devMenuClose.addEventListener('click', () => {
+      devMenuOpen = false;
+      state.paused = false;
+      devMenuModal.style.display = 'none';
+    });
+  }
+  
+  // Spawn megabestii (normalne)
+  document.getElementById('devSpawnWolf').addEventListener('click', () => {
+    spawnMegabeast(0, state.pos.x + 200, state.pos.y, false);
+    toast('🐺 Spawniono Megawilka!');
+  });
+  
+  document.getElementById('devSpawnBoar').addEventListener('click', () => {
+    spawnMegabeast(1, state.pos.x + 200, state.pos.y, false);
+    toast('🐗 Spawniono Megadzika!');
+  });
+  
+  document.getElementById('devSpawnSnake').addEventListener('click', () => {
+    spawnMegabeast(2, state.pos.x + 200, state.pos.y, false);
+    toast('🐍 Spawniono Megażmiję!');
+  });
+  
+  document.getElementById('devSpawnZombie').addEventListener('click', () => {
+    spawnMegabeast(3, state.pos.x + 200, state.pos.y, false);
+    toast('🧟 Spawniono Megatrupa!');
+  });
+  
+  // Spawn ultra megabestii
+  document.getElementById('devSpawnUltraWolf').addEventListener('click', () => {
+    spawnMegabeast(0, state.pos.x + 200, state.pos.y, true);
+    toast('💀 Spawniono Ultra Megawilka!');
+  });
+  
+  document.getElementById('devSpawnUltraBoar').addEventListener('click', () => {
+    spawnMegabeast(1, state.pos.x + 200, state.pos.y, true);
+    toast('💀 Spawniono Ultra Megadzika!');
+  });
+  
+  document.getElementById('devSpawnUltraSnake').addEventListener('click', () => {
+    spawnMegabeast(2, state.pos.x + 200, state.pos.y, true);
+    toast('💀 Spawniono Ultra Megażmiję!');
+  });
+  
+  document.getElementById('devSpawnUltraZombie').addEventListener('click', () => {
+    spawnMegabeast(3, state.pos.x + 200, state.pos.y, true);
+    toast('💀 Spawniono Ultra Megatrupa!');
+  });
+  
+  // Spawn inne
+  document.getElementById('devSpawnChild').addEventListener('click', () => {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 100;
+    state.children.push({
+      x: state.pos.x + Math.cos(ang) * dist,
+      y: state.pos.y + Math.sin(ang) * dist,
+      id: Math.random().toString(36).slice(2),
+      t: 0,
+      meleeSpin: null,
+      speed: 1.5,
+      reachedPlayer: false,
+      lastAttack: 0
+    });
+    toast('👶 Spawniono dziecko!');
+  });
+  
+  document.getElementById('devSpawnNest').addEventListener('click', () => {
+    const type = Math.floor(Math.random() * ENEMIES.length);
+    spawnNest(type);
+    toast(`🏰 Spawniono legowisko typu ${type}!`);
+  });
+  
+  document.getElementById('devSpawnEnemy').addEventListener('click', () => {
+    spawnEnemy();
+    toast('👹 Spawniono wroga!');
+  });
+  
+  document.getElementById('devSpawnTree').addEventListener('click', () => {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 150;
+    state.trees.push({
+      x: state.pos.x + Math.cos(ang) * dist,
+      y: state.pos.y + Math.sin(ang) * dist,
+      size: 2.5
+    });
+    toast('🌳 Spawniono drzewo!');
+  });
+  
+  // Zasoby
+  document.getElementById('devAddGold').addEventListener('click', () => {
+    state.gold += 100;
+    toast('💰 +100 monet!');
+    updateHUD();
+  });
+  
+  document.getElementById('devAddXP').addEventListener('click', () => {
+    gainXP(1000, state.pos.x, state.pos.y);
+    toast('✨ +1000 XP!');
+  });
+  
+  document.getElementById('devAddLevel').addEventListener('click', () => {
+    state.level++;
+    state.levelUpPoints++;
+    state.lives++;
+    toast(`⭐ Awans na poziom ${state.level}!`);
+    updateHUD();
+  });
+  
+  document.getElementById('devFullHeal').addEventListener('click', () => {
+    state.hp = state.hpMax;
+    state.mp = state.mpMax;
+    toast('❤️ Pełne HP i MP!');
+    updateHUD();
+  });
+  
+  // Achievements
+  document.getElementById('devUnlockAll').addEventListener('click', () => {
+    ACHIEVEMENTS.forEach(ach => {
+      state.achievements[ach.id] = true;
+    });
+    toast('🏆 Odblokowano wszystkie achievmenty!');
+  });
+  
+  document.getElementById('devCompleteQuests').addEventListener('click', () => {
+    state.quests.tree = true;
+    state.quests.son = true;
+    state.quests.book = true;
+    toast('✅ Ukończono wszystkie questy!');
+    updateQuestLog();
   });
 }
 
@@ -2123,19 +2335,65 @@ function step(dt){
         spawnParticles(mb.x, mb.y, 12, '#ff0000', 'spark');
         
         if(mb.hp <= 0) {
-          // Megabestia pokonana - drop 30 monet
-          for(let i = 0; i < 30; i++) {
-            const dropDir = {x: rand(-1, 1), y: rand(-1, 1)};
-            spawnPickup('gold', mb.x, mb.y, 1, dropDir);
+          // Unikalne dropy dla każdego typu megabestii
+          const enemyDef = ENEMIES[mb.type];
+          if(mb.type === 0) { // 🐺 WILK
+            // Drop: 30 monet + 10 mięsiwa + 5 XP orbs
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 10; i++) {
+              spawnPickup('meat', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 5; i++) {
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(50, 100), undefined);
+            }
+          }
+          else if(mb.type === 1) { // 🐗 DZIK
+            // Drop: 30 monet + 15 jabłek + 10 mięsiwa
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 15; i++) {
+              spawnPickup('apple', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 10; i++) {
+              spawnPickup('meat', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+          }
+          else if(mb.type === 2) { // 🐍 ŻMIJA
+            // Drop: 30 monet + 20 flaszek + 10 XP orbs
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 20; i++) {
+              spawnPickup('mead', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 10; i++) {
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(30, 60), undefined);
+            }
+          }
+          else if(mb.type === 3) { // 🧟 TRUP
+            // Drop: 30 monet + 25 różnych przedmiotów + 15 XP orbs
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            const dropTypes = ['meat', 'apple', 'mead', 'seed'];
+            for(let i = 0; i < 25; i++) {
+              const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
+              spawnPickup(dropType, mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 15; i++) {
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(40, 80), undefined);
+            }
           }
           
           const mbIdx = state.megabeasts.findIndex(m => m.id === mb.id);
           if(mbIdx >= 0) {
             state.megabeasts.splice(mbIdx, 1);
-            const enemyDef = ENEMIES[mb.type];
             const enemyNames = ['Wilka', 'Dzikiej świni', 'Żmii', 'Trupa'];
             const enemyName = enemyNames[mb.type] || 'Potwora';
-            toast(`💀 MEGABESTIA ${enemyDef.emoji} ${enemyName} pokonana! +30 monet!`);
+            toast(`💀 MEGABESTIA ${enemyDef.emoji} ${enemyName} pokonana!`);
           }
         }
       }
@@ -2501,11 +2759,443 @@ function step(dt){
         delete state.enemyKnockback[e.id];
       }
     }
+  }
+  
+  // Update poison dot (zatrucie od żmii)
+  if(state.poisoned && state.poisoned.t > 0) {
+    state.poisoned.t -= dt;
+    if(state.poisoned.t > 0 && Math.floor(state.poisoned.t / 500) !== Math.floor((state.poisoned.t + dt) / 500)) {
+      // Co 0.5 sekundy obrażenia
+      state.hp -= state.poisoned.dmg;
+      floatingText(`-${state.poisoned.dmg}`, state.pos.x, state.pos.y, '#00ff00', 16, 800);
+      animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-state.poisoned.dmg)/state.hpMax)*100);
+    }
+    if(state.poisoned.t <= 0) {
+      state.poisoned = null;
+    }
+  }
+  
+  // Update megabeasts AI and attacks
+  for(const mb of state.megabeasts) {
+    mb.t += dt;
     
-    // Wrap-around for enemies
-    const wrapped = wrapPos(e.x, e.y, state.world.width, state.world.height);
-    e.x = wrapped.x;
-    e.y = wrapped.y;
+    const enemyDef = ENEMIES[mb.type];
+    if(!enemyDef) continue;
+    
+    // Calculate distance to player
+    let dx = state.pos.x - mb.x, dy = state.pos.y - mb.y;
+    if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+    if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+    const dist = Math.hypot(dx, dy);
+    
+    // Update cooldowns
+    if(mb.attackCooldown > 0) mb.attackCooldown -= dt;
+    if(mb.projectileCooldown > 0) mb.projectileCooldown -= dt;
+    
+    // Ultra megabestia ma mocniejsze ataki (1.5x obrażenia)
+    const damageMultiplier = mb.isUltra ? 1.5 : 1.0;
+    
+    // === PRZEPROJEKTOWANE MEGABESTIE - UNIKALNE WZORCE ATAKU ===
+    if(mb.type === 0) { // 🐺 MEGAWILK - Pattern: Dash Attack + Triple Bone Throw
+      // Fazy: chasing -> preparing (czerwony glow) -> dashing -> recovering
+      if(dist < 600) {
+        if(mb.state === 'idle' || mb.state === 'recovering') {
+          mb.state = 'chasing';
+          mb.phase = 0;
+        }
+        
+        if(mb.state === 'chasing') {
+          // Normalny chase (1.2x szybciej)
+          const speed = enemyDef.speed * 1.2;
+          mb.x += (dx/dist) * speed * (dt/16);
+          mb.y += (dy/dist) * speed * (dt/16);
+          
+          // Pattern 1: Dash Attack (co 3 sekundy, gdy blisko)
+          if(mb.dashCooldown <= 0 && dist < 200 && dist > 80) {
+            mb.state = 'preparing';
+            mb.warningTimer = 600; // 0.6s sygnał ostrzegawczy (czerwony glow)
+            mb.chargeDirection = {x: dx/dist, y: dy/dist};
+            mb.dashCooldown = 3000;
+          }
+          
+          // Pattern 2: Triple Bone Throw (co 4 sekundy)
+          if(mb.projectileCooldown <= 0 && dist < 400) {
+            mb.projectileCooldown = 4000;
+            // Rzuca 3 kośćmi w 3 kierunkach (gracz + 2 boki)
+            for(let i = 0; i < 3; i++) {
+              const angle = Math.atan2(dy, dx) + (i - 1) * 0.5; // -0.5, 0, +0.5 rad
+              const vx = Math.cos(angle) * 5;
+              const vy = Math.sin(angle) * 5;
+              const arrowTrail = [];
+              for(let j = 0; j < 8; j++) {
+                arrowTrail.push({ x: mb.x, y: mb.y });
+              }
+              state.projectiles.push({
+                x: mb.x,
+                y: mb.y,
+                vx: vx,
+                vy: vy,
+                dmg: Math.floor(enemyDef.atk * 1.2 * damageMultiplier),
+                ttl: 2500,
+                emoji: '🦴',
+                trail: arrowTrail,
+                rotation: angle
+              });
+            }
+          }
+        }
+        else if(mb.state === 'preparing') {
+          // Czerwony glow - sygnał ostrzegawczy (FAIR!)
+          mb.warningTimer -= dt;
+          if(mb.warningTimer <= 0) {
+            mb.state = 'attacking';
+            mb.chargeSpeed = enemyDef.speed * 4; // Szybki dash
+            mb.attackTimer = 400; // Dash trwa 400ms
+          }
+        }
+        else if(mb.state === 'attacking') {
+          // Dash attack
+          mb.x += mb.chargeDirection.x * mb.chargeSpeed * (dt/16);
+          mb.y += mb.chargeDirection.y * mb.chargeSpeed * (dt/16);
+          mb.attackTimer -= dt;
+          
+          // Kolizja z graczem
+          if(dist < 35) {
+            const damage = Math.floor(enemyDef.atk * 2 * damageMultiplier);
+            state.hp -= damage;
+            floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 24, 1200);
+            addScreenShake(3, 200);
+            spawnParticles(state.pos.x, state.pos.y, 10, '#ff0000', 'spark');
+            animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-damage)/state.hpMax)*100);
+            mb.state = 'recovering';
+            mb.attackCooldown = 1000; // Recovery time
+          }
+          
+          if(mb.attackTimer <= 0) {
+            mb.state = 'recovering';
+            mb.attackCooldown = 1000;
+          }
+        }
+        else if(mb.state === 'recovering') {
+          // Po dashu - krótka pauza
+          if(mb.attackCooldown <= 0) {
+            mb.state = 'chasing';
+          }
+        }
+        
+        // Update cooldowns
+        if(mb.dashCooldown > 0) mb.dashCooldown -= dt;
+      } else {
+        mb.state = 'idle';
+      }
+    }
+    else if(mb.type === 1) { // 🐗 MEGADZIK - Pattern: Warning Charge + Minion Spawn
+      // Fazy: chasing -> preparing (żółty glow + cofanie) -> charging -> recovering
+      if(dist < 700) {
+        if(mb.state === 'idle' || mb.state === 'recovering') {
+          mb.state = 'chasing';
+          mb.phase = 0;
+        }
+        
+        if(mb.state === 'chasing') {
+          // Powolny chase (0.9x szybciej)
+          const speed = enemyDef.speed * 0.9;
+          mb.x += (dx/dist) * speed * (dt/16);
+          mb.y += (dy/dist) * speed * (dt/16);
+          
+          // Pattern: Charge Attack (co 5 sekund, gdy w średniej odległości)
+          if(mb.attackCooldown <= 0 && dist < 400 && dist > 150) {
+            mb.state = 'preparing';
+            mb.warningTimer = 1000; // 1s sygnał - cofa się i świeci żółto (FAIR!)
+            mb.chargeDirection = {x: dx/dist, y: dy/dist};
+            mb.attackCooldown = 5000;
+          }
+          
+          // Spawn małych dzików co 8 sekund
+          if(mb.minionSpawnTimer >= 8000) {
+            mb.minionSpawnTimer = 0;
+            const minionCount = 2;
+            for(let i = 0; i < minionCount; i++) {
+              const ang = Math.random() * Math.PI * 2;
+              const distMinion = 80 + Math.random() * 40;
+              const ex = (mb.x + Math.cos(ang)*distMinion + state.world.width) % state.world.width;
+              const ey = (mb.y + Math.sin(ang)*distMinion + state.world.height) % state.world.height;
+              state.enemies.push({
+                ...enemyDef,
+                x: ex,
+                y: ey,
+                hp: enemyDef.hp,
+                hpMax: enemyDef.hp,
+                t: 0,
+                id: Math.random().toString(36).slice(2),
+                nestId: null
+              });
+            }
+            toast(`🐗 Megadzik przyzwał ${minionCount} małych dzików!`);
+          }
+          mb.minionSpawnTimer += dt;
+        }
+        else if(mb.state === 'preparing') {
+          // Cofanie się i żółty glow - sygnał ostrzegawczy (FAIR!)
+          mb.warningTimer -= dt;
+          // Cofanie się (backing up)
+          mb.x -= mb.chargeDirection.x * enemyDef.speed * 0.5 * (dt/16);
+          mb.y -= mb.chargeDirection.y * enemyDef.speed * 0.5 * (dt/16);
+          
+          if(mb.warningTimer <= 0) {
+            mb.state = 'attacking';
+            mb.chargeSpeed = enemyDef.speed * 3.5; // Szybki charge
+            mb.attackTimer = 800; // Charge trwa 800ms
+          }
+        }
+        else if(mb.state === 'attacking') {
+          // Charge attack
+          mb.x += mb.chargeDirection.x * mb.chargeSpeed * (dt/16);
+          mb.y += mb.chargeDirection.y * mb.chargeSpeed * (dt/16);
+          mb.attackTimer -= dt;
+          
+          // Kolizja z graczem
+          if(dist < 40) {
+            const damage = Math.floor(enemyDef.atk * 3 * damageMultiplier);
+            state.hp -= damage;
+            floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 28, 1200);
+            addScreenShake(5, 250);
+            spawnParticles(state.pos.x, state.pos.y, 15, '#ff0000', 'spark');
+            animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-damage)/state.hpMax)*100);
+            
+            // Mocny knockback
+            const knockback = 60;
+            state.pos.x -= mb.chargeDirection.x * knockback;
+            state.pos.y -= mb.chargeDirection.y * knockback;
+            
+            mb.state = 'recovering';
+            mb.attackCooldown = 1500;
+          }
+          
+          if(mb.attackTimer <= 0) {
+            mb.state = 'recovering';
+            mb.attackCooldown = 1500;
+          }
+        }
+        else if(mb.state === 'recovering') {
+          if(mb.attackCooldown <= 0) {
+            mb.state = 'chasing';
+          }
+        }
+      } else {
+        mb.state = 'idle';
+      }
+    }
+    else if(mb.type === 2) { // 🐍 MEGAŻMIJA - Pattern: Teleport + Poison Circle + Quick Bite
+      // Fazy: chasing -> preparing (zielony glow) -> teleporting -> attacking -> recovering
+      if(dist < 550) {
+        if(mb.state === 'idle' || mb.state === 'recovering') {
+          mb.state = 'chasing';
+          mb.phase = 0;
+        }
+        
+        if(mb.state === 'chasing') {
+          // Szybki chase (1.8x szybciej)
+          const speed = enemyDef.speed * 1.8;
+          mb.x += (dx/dist) * speed * (dt/16);
+          mb.y += (dy/dist) * speed * (dt/16);
+          
+          // Pattern 1: Teleport + Poison Circle (co 6 sekund)
+          if(mb.teleportTimer <= 0 && dist < 300) {
+            mb.state = 'preparing';
+            mb.warningTimer = 800; // 0.8s sygnał - zielony glow (FAIR!)
+            mb.teleportTimer = 6000;
+          }
+          
+          // Pattern 2: Quick Bite (co 2.5 sekundy, gdy blisko)
+          if(mb.attackCooldown <= 0 && dist < 50) {
+            mb.attackCooldown = 2500;
+            const damage = Math.floor(enemyDef.atk * 1.5 * damageMultiplier);
+            state.hp -= damage;
+            floatingText(`-${damage}`, state.pos.x, state.pos.y, '#00ff00', 24, 1200);
+            animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-damage)/state.hpMax)*100);
+            // Zatrucie: dot przez 4 sekundy (ultra ma mocniejsze zatrucie)
+            const poisonDmg = mb.isUltra ? 4 : 3;
+            if(!state.poisoned) {
+              state.poisoned = {t: 4000, dmg: poisonDmg};
+            } else {
+              state.poisoned.t = 4000; // Resetuj timer
+              state.poisoned.dmg = poisonDmg;
+            }
+            spawnParticles(state.pos.x, state.pos.y, 8, '#00ff00', 'spark');
+          }
+        }
+        else if(mb.state === 'preparing') {
+          // Zielony glow - sygnał ostrzegawczy (FAIR!)
+          mb.warningTimer -= dt;
+          if(mb.warningTimer <= 0) {
+            mb.state = 'attacking';
+            // Teleport za gracza
+            const teleportDist = 100;
+            const teleportAngle = Math.atan2(dy, dx) + Math.PI; // Za gracza
+            mb.x = state.pos.x + Math.cos(teleportAngle) * teleportDist;
+            mb.y = state.pos.y + Math.sin(teleportAngle) * teleportDist;
+            // Wrap-around
+            const wrapped = wrapPos(mb.x, mb.y, state.world.width, state.world.height);
+            mb.x = wrapped.x;
+            mb.y = wrapped.y;
+            
+            // Spawn poison circle - 8 jadów w okręgu
+            for(let i = 0; i < 8; i++) {
+              const angle = (i / 8) * Math.PI * 2;
+              const vx = Math.cos(angle) * 4;
+              const vy = Math.sin(angle) * 4;
+              const arrowTrail = [];
+              for(let j = 0; j < 6; j++) {
+                arrowTrail.push({ x: mb.x, y: mb.y });
+              }
+              state.projectiles.push({
+                x: mb.x,
+                y: mb.y,
+                vx: vx,
+                vy: vy,
+                dmg: Math.floor(enemyDef.atk * 0.8 * damageMultiplier),
+                ttl: 2000,
+                emoji: '💚',
+                trail: arrowTrail,
+                rotation: angle,
+                isPoison: true
+              });
+            }
+            
+            mb.state = 'recovering';
+            mb.attackCooldown = 1000;
+          }
+        }
+        else if(mb.state === 'recovering') {
+          if(mb.attackCooldown <= 0) {
+            mb.state = 'chasing';
+          }
+        }
+        
+        // Update cooldowns
+        if(mb.teleportTimer > 0) mb.teleportTimer -= dt;
+      } else {
+        mb.state = 'idle';
+      }
+    }
+    else if(mb.type === 3) { // 🧟 MEGATRUP - Pattern: Spiral Bone Throw + Heavy Slam + Minion Spawn
+      // Fazy: chasing -> preparing (czerwony glow) -> attacking -> recovering
+      if(dist < 600) {
+        if(mb.state === 'idle' || mb.state === 'recovering') {
+          mb.state = 'chasing';
+          mb.phase = 0;
+        }
+        
+        if(mb.state === 'chasing') {
+          // Powolny chase (0.7x szybciej)
+          const speed = enemyDef.speed * 0.7;
+          mb.x += (dx/dist) * speed * (dt/16);
+          mb.y += (dy/dist) * speed * (dt/16);
+          
+          // Pattern 1: Spiral Bone Throw (co 5 sekund)
+          if(mb.projectileCooldown <= 0 && dist < 400) {
+            mb.projectileCooldown = 5000;
+            // Spawn 12 kości w spirali (pełny okrąg)
+            for(let i = 0; i < 12; i++) {
+              const angle = (i / 12) * Math.PI * 2;
+              const vx = Math.cos(angle) * 3.5;
+              const vy = Math.sin(angle) * 3.5;
+              const arrowTrail = [];
+              for(let j = 0; j < 6; j++) {
+                arrowTrail.push({ x: mb.x, y: mb.y });
+              }
+              state.projectiles.push({
+                x: mb.x,
+                y: mb.y,
+                vx: vx,
+                vy: vy,
+                dmg: Math.floor(enemyDef.atk * 1.0 * damageMultiplier),
+                ttl: 3000,
+                emoji: '🦴',
+                trail: arrowTrail,
+                rotation: angle
+              });
+            }
+          }
+          
+          // Pattern 2: Heavy Slam (co 4 sekundy, gdy blisko)
+          if(mb.attackCooldown <= 0 && dist < 60) {
+            mb.state = 'preparing';
+            mb.warningTimer = 1000; // 1s sygnał - czerwony glow + zatrzymanie (FAIR!)
+            mb.attackCooldown = 4000;
+          }
+          
+          // Pattern 3: Spawn minionów co 10 sekund
+          mb.minionSpawnTimer += dt;
+          if(mb.minionSpawnTimer >= 10000) {
+            mb.minionSpawnTimer = 0;
+            const minionCount = 3;
+            for(let i = 0; i < minionCount; i++) {
+              const ang = Math.random() * Math.PI * 2;
+              const distMinion = 70 + Math.random() * 50;
+              const ex = (mb.x + Math.cos(ang)*distMinion + state.world.width) % state.world.width;
+              const ey = (mb.y + Math.sin(ang)*distMinion + state.world.height) % state.world.height;
+              state.enemies.push({
+                ...enemyDef,
+                x: ex,
+                y: ey,
+                hp: enemyDef.hp,
+                hpMax: enemyDef.hp,
+                t: 0,
+                id: Math.random().toString(36).slice(2),
+                nestId: null
+              });
+            }
+            toast(`🧟 Megatrup przyzwał ${minionCount} minionów!`);
+          }
+        }
+        else if(mb.state === 'preparing') {
+          // Czerwony glow + zatrzymanie - sygnał ostrzegawczy (FAIR!)
+          mb.warningTimer -= dt;
+          // Zatrzymany - nie porusza się
+          
+          if(mb.warningTimer <= 0) {
+            mb.state = 'attacking';
+            // Heavy slam - mocny atak wręcz
+            const damage = Math.floor(enemyDef.atk * 3 * damageMultiplier);
+            state.hp -= damage;
+            floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 32, 1200);
+            addScreenShake(6, 300);
+            spawnParticles(state.pos.x, state.pos.y, 20, '#ff0000', 'spark');
+            animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-damage)/state.hpMax)*100);
+            
+            // Mocny knockback
+            const knockback = 80;
+            const knockDir = {x: dx/dist, y: dy/dist};
+            state.pos.x -= knockDir.x * knockback;
+            state.pos.y -= knockDir.y * knockback;
+            
+            mb.state = 'recovering';
+            mb.attackCooldown = 2000;
+          }
+        }
+        else if(mb.state === 'recovering') {
+          if(mb.attackCooldown <= 0) {
+            mb.state = 'chasing';
+          }
+        }
+      } else {
+        mb.state = 'idle';
+      }
+    }
+    
+    // Wrap-around
+    const mbWrapped = wrapPos(mb.x, mb.y, state.world.width, state.world.height);
+    mb.x = mbWrapped.x;
+    mb.y = mbWrapped.y;
+  }
+  
+  // Wrap-around for enemies
+  for(const e of state.enemies) {
+    const eWrapped = wrapPos(e.x, e.y, state.world.width, state.world.height);
+    e.x = eWrapped.x;
+    e.y = eWrapped.y;
   }
   
   // Woman NPC movement
@@ -2800,6 +3490,35 @@ function step(dt){
     pr.y = wrapped.y;
     pr.ttl-=dt;
     
+    // Check collision with player (tylko dla projectile od megabestii - mają isPoison lub emoji 🦴/💚)
+    if(pr.emoji === '🦴' || pr.emoji === '💚' || pr.isPoison) {
+      let dx = state.pos.x - pr.x, dy = state.pos.y - pr.y;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      const dist = Math.hypot(dx, dy);
+      
+      if(dist < 25) {
+        // Trafienie gracza
+        state.hp -= pr.dmg;
+        floatingText(`-${pr.dmg}`, state.pos.x, state.pos.y, '#ff0000', 24, 1200);
+        addScreenShake(2, 150);
+        spawnParticles(state.pos.x, state.pos.y, 8, '#ff0000', 'spark');
+        animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-pr.dmg)/state.hpMax)*100);
+        
+        // Jeśli to trucizna, zatruj gracza
+        if(pr.isPoison || pr.emoji === '💚') {
+          if(!state.poisoned) {
+            state.poisoned = {t: 3000, dmg: 2};
+          } else {
+            state.poisoned.t = 3000; // Resetuj timer
+          }
+        }
+        
+        pr.ttl = 0;
+        updateHUD();
+      }
+    }
+    
     // Optimized collision - only check enemies within range
     const projectileRange = 30; // Check enemies within this range
     for(const e of state.enemies){ 
@@ -2858,19 +3577,65 @@ function step(dt){
         pr.ttl = 0;
         
         if(mb.hp <= 0) {
-          // Megabestia pokonana - drop 30 monet
-          for(let i = 0; i < 30; i++) {
-            const dropDir = {x: rand(-1, 1), y: rand(-1, 1)};
-            spawnPickup('gold', mb.x, mb.y, 1, dropDir);
+          // Unikalne dropy dla każdego typu megabestii
+          const enemyDef = ENEMIES[mb.type];
+          if(mb.type === 0) { // 🐺 WILK
+            // Drop: 30 monet + 10 mięsiwa + 5 XP orbs
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 10; i++) {
+              spawnPickup('meat', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 5; i++) {
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(50, 100), undefined);
+            }
+          }
+          else if(mb.type === 1) { // 🐗 DZIK
+            // Drop: 30 monet + 15 jabłek + 10 mięsiwa
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 15; i++) {
+              spawnPickup('apple', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 10; i++) {
+              spawnPickup('meat', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+          }
+          else if(mb.type === 2) { // 🐍 ŻMIJA
+            // Drop: 30 monet + 20 flaszek + 10 XP orbs
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 20; i++) {
+              spawnPickup('mead', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 10; i++) {
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(30, 60), undefined);
+            }
+          }
+          else if(mb.type === 3) { // 🧟 TRUP
+            // Drop: 30 monet + 25 różnych przedmiotów + 15 XP orbs
+            for(let i = 0; i < 30; i++) {
+              spawnPickup('gold', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            const dropTypes = ['meat', 'apple', 'mead', 'seed'];
+            for(let i = 0; i < 25; i++) {
+              const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
+              spawnPickup(dropType, mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
+            }
+            for(let i = 0; i < 15; i++) {
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(40, 80), undefined);
+            }
           }
           
           const mbIdx = state.megabeasts.findIndex(m => m.id === mb.id);
           if(mbIdx >= 0) {
             state.megabeasts.splice(mbIdx, 1);
-            const enemyDef = ENEMIES[mb.type];
             const enemyNames = ['Wilka', 'Dzikiej świni', 'Żmii', 'Trupa'];
             const enemyName = enemyNames[mb.type] || 'Potwora';
-            toast(`💀 MEGABESTIA ${enemyDef.emoji} ${enemyName} pokonana! +30 monet!`);
+            toast(`💀 MEGABESTIA ${enemyDef.emoji} ${enemyName} pokonana!`);
           }
         }
         break;
@@ -3171,6 +3936,13 @@ function draw(){
       const enemyDef = ENEMIES[mb.type];
       const mbEmoji = enemyDef ? enemyDef.emoji : '👹';
       
+      // Ultra megabestia jest większa
+      if(mb.isUltra) {
+        ctx.font='80px "Apple Color Emoji", "Segoe UI Emoji"';
+      } else {
+        ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
+      }
+      
       // Hit flash effect
       const isFlashing = enemyHitFlashes[mb.id] && enemyHitFlashes[mb.id] > 0;
       
@@ -3181,24 +3953,53 @@ function draw(){
         ctx.shadowColor = '#ffffff';
         ctx.fillText(mbEmoji, s.x, s.y);
         ctx.restore();
-      } else {
-        // Efekt świecenia dla megabestii
+      } else if(mb.state === 'preparing' && mb.warningTimer > 0) {
+        // Sygnał ostrzegawczy (FAIR MECHANICS) - pulsujący glow podczas przygotowania
         ctx.save();
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#ff0000';
+        let glowColor = '#ef4444'; // Domyślnie czerwony (wilk, trup)
+        if(mb.type === 1) glowColor = '#fbbf24'; // Dzik - żółty
+        if(mb.type === 2) glowColor = '#10b981'; // Żmija - zielony
+        
+        const pulse = 0.5 + Math.sin(Date.now() / 100) * 0.3; // Pulsujący efekt
+        ctx.globalAlpha = pulse * 0.7;
+        ctx.shadowBlur = 35 + Math.sin(Date.now() / 80) * 15;
+        ctx.shadowColor = glowColor;
+        ctx.fillText(mbEmoji, s.x, s.y);
+        ctx.restore();
+      } else {
+        // Normalny efekt świecenia dla megabestii
+        ctx.save();
+        if(mb.isUltra) {
+          // Ultra megabestia - większy, bardziej intensywny glow (pomarańczowy/purpurowy)
+          ctx.shadowBlur = 35;
+          ctx.shadowColor = '#ff6b00'; // Pomarańczowy glow dla ultra
+          ctx.globalAlpha = 0.95;
+        } else {
+          // Normalna megabestia - czerwony glow
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#ef4444';
+        }
         ctx.fillText(mbEmoji, s.x, s.y);
         ctx.restore();
       }
       
-      // Show HP bar (zawsze widoczny, większy)
+      // Show HP bar (zawsze widoczny, większy dla ultra)
       const hpPercent = mb.hp / mb.hpMax;
-      const barWidth = 70;
-      const barHeight = 8;
+      const barWidth = mb.isUltra ? 90 : 70; // Ultra ma szerszy pasek
+      const barHeight = mb.isUltra ? 10 : 8; // Ultra ma wyższy pasek
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
       ctx.fillRect(s.x - barWidth/2, s.y - 60, barWidth, barHeight);
-      ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
+      // Ultra ma pomarańczowy pasek, normalna ma standardowy
+      if(mb.isUltra) {
+        ctx.fillStyle = hpPercent > 0.5 ? '#ff6b00' : hpPercent > 0.25 ? '#ff9500' : '#ff0000';
+      } else {
+        ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
+      }
       ctx.fillRect(s.x - barWidth/2, s.y - 60, barWidth * hpPercent, barHeight);
       ctx.fillStyle = '#e6e6e6';
+      
+      // Przywróć domyślny font
+      ctx.font='30px "Apple Color Emoji", "Segoe UI Emoji"';
     });
   }
 
@@ -3726,6 +4527,28 @@ function drawMiniMap() {
       // Fallback - kamień
       minimapCtx.font = '10px "Apple Color Emoji", "Segoe UI Emoji"';
       minimapCtx.fillText('🪨', nestPos.x - 5, nestPos.y + 5);
+    }
+  }
+  
+  // Rysuj megabestie (większe, czerwone/pomarańczowe)
+  for(const mb of state.megabeasts) {
+    const mbPos = worldToMinimap(mb.x, mb.y);
+    const enemyDef = ENEMIES[mb.type];
+    if(enemyDef) {
+      if(mb.isUltra) {
+        // Ultra megabestia - większa, pomarańczowa
+        minimapCtx.font = '18px "Apple Color Emoji", "Segoe UI Emoji"';
+        minimapCtx.shadowBlur = 6;
+        minimapCtx.shadowColor = '#ff6b00';
+        minimapCtx.fillText(enemyDef.emoji, mbPos.x - 9, mbPos.y + 9);
+      } else {
+        // Normalna megabestia - czerwona
+        minimapCtx.font = '14px "Apple Color Emoji", "Segoe UI Emoji"';
+        minimapCtx.shadowBlur = 4;
+        minimapCtx.shadowColor = '#ef4444';
+        minimapCtx.fillText(enemyDef.emoji, mbPos.x - 7, mbPos.y + 7);
+      }
+      minimapCtx.shadowBlur = 0;
     }
   }
   

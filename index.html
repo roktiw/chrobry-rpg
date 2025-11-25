@@ -723,6 +723,54 @@
 
   <!-- Modal Start Screen -->
 
+  <!-- Developer Menu -->
+  <div class="modal" id="devMenuModal" style="display:none;">
+    <div class="panel" style="max-width:600px;">
+      <button class="modal-close" aria-label="Zamknij">×</button>
+      <h1>🛠️ Menu Deweloperskie</h1>
+      
+      <div style="display:flex; flex-direction:column; gap:12px; margin-top:24px;">
+        <h2 style="font-size:20px; margin:0; color:#fbbf24; text-shadow: 0 2px 6px rgba(0,0,0,0.5);">Spawn Megabestii</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn btn-warning" id="devSpawnWolf">🐺 Spawn Wilk</button>
+          <button class="btn btn-warning" id="devSpawnBoar">🐗 Spawn Dzik</button>
+          <button class="btn btn-warning" id="devSpawnSnake">🐍 Spawn Żmija</button>
+          <button class="btn btn-warning" id="devSpawnZombie">🧟 Spawn Trup</button>
+        </div>
+        
+        <h2 style="font-size:20px; margin:16px 0 0 0; color:#ff6b00; text-shadow: 0 2px 6px rgba(0,0,0,0.5);">Spawn Ultra Megabestii</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn" style="background:linear-gradient(135deg, rgba(255,107,0,0.9), rgba(255,149,0,0.95)); border-color:rgba(255,107,0,0.8);" id="devSpawnUltraWolf">🐺 Spawn Ultra Wilk</button>
+          <button class="btn" style="background:linear-gradient(135deg, rgba(255,107,0,0.9), rgba(255,149,0,0.95)); border-color:rgba(255,107,0,0.8);" id="devSpawnUltraBoar">🐗 Spawn Ultra Dzik</button>
+          <button class="btn" style="background:linear-gradient(135deg, rgba(255,107,0,0.9), rgba(255,149,0,0.95)); border-color:rgba(255,107,0,0.8);" id="devSpawnUltraSnake">🐍 Spawn Ultra Żmija</button>
+          <button class="btn" style="background:linear-gradient(135deg, rgba(255,107,0,0.9), rgba(255,149,0,0.95)); border-color:rgba(255,107,0,0.8);" id="devSpawnUltraZombie">🧟 Spawn Ultra Trup</button>
+        </div>
+        
+        <h2 style="font-size:20px; margin:16px 0 0 0; color:#10b981; text-shadow: 0 2px 6px rgba(0,0,0,0.5);">Spawn Inne</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn btn-success" id="devSpawnChild">👶 Spawn Dziecko</button>
+          <button class="btn btn-success" id="devSpawnNest">🏰 Spawn Legowisko</button>
+          <button class="btn btn-success" id="devSpawnEnemy">👹 Spawn Wróg</button>
+          <button class="btn btn-success" id="devSpawnTree">🌳 Spawn Drzewo</button>
+        </div>
+        
+        <h2 style="font-size:20px; margin:16px 0 0 0; color:#3b82f6; text-shadow: 0 2px 6px rgba(0,0,0,0.5);">Zasoby</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn btn-primary" id="devAddGold">💰 +100 Monet</button>
+          <button class="btn btn-primary" id="devAddXP">✨ +1000 XP</button>
+          <button class="btn btn-primary" id="devAddLevel">⭐ +1 Poziom</button>
+          <button class="btn btn-primary" id="devFullHeal">❤️ Pełne HP/MP</button>
+        </div>
+        
+        <h2 style="font-size:20px; margin:16px 0 0 0; color:#a78bfa; text-shadow: 0 2px 6px rgba(0,0,0,0.5);">Achievements</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn" style="background:linear-gradient(135deg, rgba(139,92,246,0.9), rgba(124,58,237,0.95)); border-color:rgba(139,92,246,0.8);" id="devUnlockAll">🏆 Odblokuj Wszystkie</button>
+          <button class="btn" style="background:linear-gradient(135deg, rgba(139,92,246,0.9), rgba(124,58,237,0.95)); border-color:rgba(139,92,246,0.8);" id="devCompleteQuests">✅ Ukończ Questy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="game.js"></script>
 </body>
 </html>
