@@ -1041,6 +1041,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   user-select: none;
   box-shadow: 0 4px 12px rgba(0,0,0,.5);
   transition: all 0.1s;
+  position: relative;
+  overflow: hidden;
 }
 @media (min-width: 768px) {
   .action-btn {
@@ -1062,6 +1064,24 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 .action-btn-b {
   background: rgba(64,120,255,.3);
   border-color: rgba(120,180,255,.5);
+}
+
+.action-btn-emoji {
+  position: relative;
+  z-index: 2;
+  line-height: 1;
+}
+
+.action-btn-cooldown {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.7);
+  transition: height 0.1s linear, opacity 0.2s ease;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 0 0 50% 50%;
 }
 /* Animacje konsumpcji */
 @keyframes consumeApple {

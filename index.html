@@ -94,8 +94,14 @@
     
     <!-- Przyciski akcji (prawy dolny róg) -->
     <div class="action-buttons">
-      <button class="action-btn action-btn-b" id="actionBtnB" title="Atak projectile (B)">🏹</button>
-      <button class="action-btn action-btn-a" id="actionBtnA" title="Atak ręcz (A)">⚔️</button>
+      <button class="action-btn action-btn-b" id="actionBtnB" title="Atak projectile (B)">
+        <span class="action-btn-emoji">🏹</span>
+        <div class="action-btn-cooldown" id="cooldownB"></div>
+      </button>
+      <button class="action-btn action-btn-a" id="actionBtnA" title="Atak ręcz (A)">
+        <span class="action-btn-emoji">⚔️</span>
+        <div class="action-btn-cooldown" id="cooldownA"></div>
+      </button>
     </div>
   </div>
 

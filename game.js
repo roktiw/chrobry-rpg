@@ -581,6 +581,26 @@ const hudMead = document.getElementById('hudMead');
   if(hudMead) hudMead.textContent = state.inventory.mead || 0;
     const livesDisplay = document.getElementById('livesDisplay');
     if(livesDisplay) livesDisplay.textContent = state.lives;
+  
+  // Update cooldown indicators
+  const cooldownA = document.getElementById('cooldownA');
+  const cooldownB = document.getElementById('cooldownB');
+  if(cooldownA) {
+    const meleeCD = state.attack.cooldown;
+    const meleeMaxCD = state.attack.cdMelee;
+    const meleePercent = meleeMaxCD > 0 ? Math.min(100, (meleeCD / meleeMaxCD) * 100) : 0;
+    cooldownA.style.height = `${meleePercent}%`;
+    cooldownA.style.opacity = meleeCD > 0 ? '0.7' : '0';
+  }
+  if(cooldownB) {
+    // Ranged attack uses the same cooldown timer
+    const rangedCD = state.attack.cooldown;
+    const rangedMaxCD = state.attack.cdRanged;
+    const rangedPercent = rangedMaxCD > 0 ? Math.min(100, (rangedCD / rangedMaxCD) * 100) : 0;
+    cooldownB.style.height = `${rangedPercent}%`;
+    cooldownB.style.opacity = rangedCD > 0 ? '0.7' : '0';
+  }
+  
   updateQuestLog();
 }
 
@@ -1425,7 +1445,8 @@ function killEnemy(e){
   const dropDir1 = {x: rand(-0.8, 0.8), y: -0.5};
   const dropDir2 = {x: rand(-0.8, 0.8), y: -0.5};
   spawnPickup('meat', e.x, e.y, undefined, dropDir1);
-  spawnPickup('xp', e.x, e.y, Math.round(rand(10,20)), dropDir2);
+  const xpValue = Math.round(rand(10,20));
+  spawnPickup('xp', e.x, e.y, xpValue, dropDir2);
   const idx = state.enemies.findIndex(x=>x===e); if(idx>=0) state.enemies.splice(idx,1);
   triggerPlayerReaction('killEnemy'); // Reakcja na zabicie wroga
   setTimeout(spawnEnemy, 500);
@@ -1501,16 +1522,43 @@ function killEnemy(e){
 }
 
 // === XP / Level ===
-function gainXP(v){
+function gainXP(v, x, y){
   let need = xpReq(state.level);
   const oldXP = state.xp;
   const oldPercent = (oldXP/need)*100;
   state.xp += v;
+  
+  // Show XP gain floating text
+  if(x !== undefined && y !== undefined) {
+    floatingText(`+${v} XP`, x, y, '#fbbf24', 18, 1000);
+  }
+  
   if(state.xp >= need){
     state.level++;
     state.xp = 0;
     state.lives++; // +1 życie za każdy level up
     animateBar('xp', oldPercent, 0);
+    
+    // Level up celebration
+    if(x !== undefined && y !== undefined) {
+      // Particle burst
+      for(let i = 0; i < 30; i++) {
+        const angle = (Math.PI * 2 * i) / 30;
+        const speed = 2 + Math.random() * 3;
+        particles.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          t: 800 + Math.random() * 400,
+          color: ['#fbbf24', '#f59e0b', '#d97706'][Math.floor(Math.random() * 3)],
+          size: 3 + Math.random() * 4,
+          type: 'celebration'
+        });
+      }
+      // Screen flash
+      addScreenShake(3, 200);
+    }
+    
     toast(`🎉 Awans na poziom ${state.level}! +1 życie`);
     openLevelUp();
   } else {
@@ -1647,11 +1695,119 @@ document.getElementById('saveBtn').addEventListener('click', ()=>{ localStorage.
 let toasts = [];
 function toast(msg){ toasts.push({msg, t: 1600}); }
 let fly = [];
-function floatingText(msg, x,y, color){ fly.push({msg,x,y,t:800,color}); }
+// Enhanced floating text with better animations
+function floatingText(msg, x, y, color, size = 20, duration = 1000) {
+  fly.push({
+    msg,
+    x,
+    y,
+    t: duration,
+    color: color || '#fff',
+    size: size,
+    vy: -0.3, // Initial upward velocity
+    vx: (Math.random() - 0.5) * 0.1, // Slight horizontal drift
+    scale: 0.5, // Start small
+    targetScale: 1.2, // Grow to
+    alpha: 0,
+    targetAlpha: 1
+  });
+}
+
+// Screen shake system
+let screenShake = { x: 0, y: 0, t: 0, intensity: 0 };
+function addScreenShake(intensity = 5, duration = 100) {
+  screenShake.intensity = Math.max(screenShake.intensity, intensity);
+  screenShake.t = Math.max(screenShake.t, duration);
+}
+
+// Hit flash system for enemies
+let enemyHitFlashes = {}; // {enemyId: {t: timeRemaining}}
+
+// Particle system for effects
+let particles = [];
+function spawnParticles(x, y, count, color, type = 'spark') {
+  for(let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const speed = 1 + Math.random() * 2;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      t: 500 + Math.random() * 300,
+      color: color || '#fff',
+      size: 2 + Math.random() * 3,
+      type: type
+    });
+  }
+}
 
 // === Game loop ===
 function step(dt){
   if(state.paused) return;
+  
+  // Update screen shake
+  if(screenShake.t > 0) {
+    screenShake.t -= dt;
+    if(screenShake.t <= 0) {
+      screenShake.x = 0;
+      screenShake.y = 0;
+      screenShake.intensity = 0;
+    } else {
+      const intensity = screenShake.intensity * (screenShake.t / 100);
+      screenShake.x = (Math.random() - 0.5) * intensity;
+      screenShake.y = (Math.random() - 0.5) * intensity;
+    }
+  }
+  
+  // Update particles
+  for(let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.1; // Gravity
+    p.t -= dt;
+    if(p.t <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+  
+  // Update enemy hit flashes
+  for(const id in enemyHitFlashes) {
+    enemyHitFlashes[id] -= dt;
+    if(enemyHitFlashes[id] <= 0) {
+      delete enemyHitFlashes[id];
+    }
+  }
+  
+  // Update floating text
+  for(let i = fly.length - 1; i >= 0; i--) {
+    const f = fly[i];
+    f.x += f.vx;
+    f.y += f.vy;
+    f.vy -= 0.01; // Slight deceleration
+    f.t -= dt;
+    
+    // Animate scale
+    const progress = 1 - (f.t / 1000);
+    if(progress < 0.3) {
+      f.scale = 0.5 + (progress / 0.3) * (f.targetScale - 0.5);
+    } else if(progress > 0.7) {
+      f.scale = f.targetScale - ((progress - 0.7) / 0.3) * (f.targetScale - 0.8);
+    }
+    
+    // Animate alpha
+    if(progress < 0.2) {
+      f.alpha = progress / 0.2;
+    } else if(progress > 0.8) {
+      f.alpha = 1 - ((progress - 0.8) / 0.2);
+    } else {
+      f.alpha = 1;
+    }
+    
+    if(f.t <= 0) {
+      fly.splice(i, 1);
+    }
+  }
   
   // Aktualizuj timer reakcji gracza
   if(state.playerReaction.timer > 0) {
@@ -1761,7 +1917,13 @@ function step(dt){
       if(Math.hypot(dx, dy) < 30){ // Zwiększony zasięg trafienia z 22 do 30
         m.hit.add(id); 
         e.hp -= state.meleeDamage; 
-        floatingText(`-${state.meleeDamage}`, e.x, e.y, '#ff6a6a');
+        floatingText(`-${state.meleeDamage}`, e.x, e.y, '#ff6a6a', 24, 1200);
+        
+        // Hit flash effect
+        enemyHitFlashes[e.id] = 100; // 100ms flash
+        
+        // Particles on hit
+        spawnParticles(e.x, e.y, 5, '#ff6a6a', 'spark');
         
         // Knockback
         const nx = dx / Math.hypot(dx, dy) || 0;
@@ -2347,10 +2509,14 @@ function step(dt){
       // Reakcja na utratę zdrowia (tylko jeśli HP faktycznie spadło)
       if(state.hp < oldHP) {
         triggerPlayerReaction('takeDamage');
+        // Screen shake on damage
+        addScreenShake(8, 150);
+        // Particles on damage
+        spawnParticles(state.pos.x, state.pos.y, 8, '#ff6a6a', 'damage');
       }
       
       animateBar('hp', (oldHP/state.hpMax)*100, (state.hp/state.hpMax)*100);
-      floatingText(`-${e.atk}`, state.pos.x, state.pos.y, '#ffb3b3');
+      floatingText(`-${e.atk}`, state.pos.x, state.pos.y, '#ff6a6a', 22, 1200);
       state.lastHitTime = currentTime;
       
       // Knockback on hit
@@ -2485,28 +2651,37 @@ function step(dt){
                           (magnetRange <= collectRadius && dist < baseCollectRadius);
     
     if(shouldCollect){
+      // Pickup animation particles
+      spawnParticles(p.x, p.y, 5, '#4ade80', 'pickup');
+      
       if(p.kind==='meat'){ 
         state.inventory.meat++;
+        floatingText('+Mięso', p.x, p.y, '#f59e0b', 16, 800);
         toast('🍖 +Mięso');
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='mead'){ 
         state.inventory.mead++;
+        floatingText('+Flaszka', p.x, p.y, '#8b5cf6', 16, 800);
         toast('🍾 +Flaszka');
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='gold'){ 
         state.gold += p.value||1; 
+        floatingText(`+${p.value||1}💰`, p.x, p.y, '#fbbf24', 18, 1000);
         toast(`🪙 +${p.value||1}`);
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='xp'){ 
-        gainXP(p.value||10); // gainXP już ma animację
+        gainXP(p.value||10, p.x, p.y); // gainXP z pozycją dla floating text
         toast(`✨ +${p.value||10} XP`);
         triggerPlayerReaction('pickup');
+        // Particles on XP pickup
+        spawnParticles(p.x, p.y, 8, '#fbbf24', 'spark');
       }
       if(p.kind==='apple'){ 
         state.inventory.apples++;
+        floatingText('+Jabłko', p.x, p.y, '#ef4444', 16, 800);
         toast('🍎 +Jabłko');
         triggerPlayerReaction('pickup');
         // 10% chance to drop seed
@@ -2518,11 +2693,13 @@ function step(dt){
       }
       if(p.kind==='seed') {
         state.inventory.seeds++;
+        floatingText('+Nasiono', p.x, p.y, '#10b981', 16, 800);
         toast('🌱 +Nasiono');
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='wood') {
         state.inventory.wood++;
+        floatingText('+Drewno', p.x, p.y, '#8b4513', 16, 800);
         toast('🪵 +Drewno');
         triggerPlayerReaction('pickup');
       }
@@ -2591,6 +2768,10 @@ function step(dt){
 
 // === Render ===
 function draw(){
+  // Apply screen shake
+  ctx.save();
+  ctx.translate(screenShake.x, screenShake.y);
+  
   ctx.clearRect(0,0,canvas.width, canvas.height);
 
   // tło: las
@@ -2749,26 +2930,56 @@ function draw(){
     ctx.restore();
   }
 
-  // enemies - optimized rendering
+  // enemies - optimized rendering with hit flash
   ctx.font='30px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const e of state.enemies){ 
     renderWithWrapAround(e.x, e.y, (s) => {
-          ctx.fillText(e.emoji, s.x, s.y); 
-      // Show HP bar (zawsze widoczny)
-      // Znajdź maxHP z ENEMIES na podstawie emoji lub użyj zapisanego hpMax
+      // Hit flash effect
+      if(enemyHitFlashes[e.id] && enemyHitFlashes[e.id] > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.8;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ffffff';
+        ctx.fillText(e.emoji, s.x, s.y);
+        ctx.restore();
+      } else {
+        ctx.fillText(e.emoji, s.x, s.y);
+      }
+      
+      // Show HP bar (ulepszony - większy, gradient, lepszy kontrast)
       let maxHP = e.hpMax || e.hp;
       if(!e.hpMax) {
-        // Jeśli nie ma hpMax, znajdź w ENEMIES
         const enemyDef = ENEMIES.find(en => en.emoji === e.emoji);
         if(enemyDef) maxHP = enemyDef.hp;
       }
       const hpPercent = e.hp / maxHP;
-      const barWidth = 30;
-      const barHeight = 4;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(s.x - barWidth/2, s.y - 25, barWidth, barHeight);
-      ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
-      ctx.fillRect(s.x - barWidth/2, s.y - 25, barWidth * hpPercent, barHeight);
+      const barWidth = 40; // Większy pasek
+      const barHeight = 6; // Wyższy pasek
+      
+      // Background
+      ctx.fillStyle = 'rgba(0,0,0,0.8)';
+      ctx.fillRect(s.x - barWidth/2 - 1, s.y - 30 - 1, barWidth + 2, barHeight + 2);
+      
+      // HP bar with gradient
+      const gradient = ctx.createLinearGradient(s.x - barWidth/2, s.y - 30, s.x + barWidth/2, s.y - 30);
+      if(hpPercent > 0.6) {
+        gradient.addColorStop(0, '#4ade80');
+        gradient.addColorStop(1, '#10b981');
+      } else if(hpPercent > 0.3) {
+        gradient.addColorStop(0, '#fbbf24');
+        gradient.addColorStop(1, '#f59e0b');
+      } else {
+        gradient.addColorStop(0, '#ef4444');
+        gradient.addColorStop(1, '#dc2626');
+      }
+      ctx.fillStyle = gradient;
+      ctx.fillRect(s.x - barWidth/2, s.y - 30, barWidth * hpPercent, barHeight);
+      
+      // Border
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(s.x - barWidth/2, s.y - 30, barWidth, barHeight);
+      
       ctx.fillStyle = '#e6e6e6';
     });
   }
@@ -2827,17 +3038,83 @@ function draw(){
   ctx.font=`${playerFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
   ctx.fillText(heroEmoji, ps.x, ps.y);
 
-  // miecz w wirze
-  if(state.meleeSpin){ const m=state.meleeSpin; const prog=clamp(m.t/m.dur,0,1); const startAng = m.startAngle || 0; const ang=startAng + prog*2*Math.PI; const r=90; const sx=ps.x + Math.cos(ang)*r; const sy=ps.y + Math.sin(ang)*r; ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"'; ctx.fillText('⚔️', sx, sy); }
+  // miecz w wirze z slash effect
+  if(state.meleeSpin){ 
+    const m=state.meleeSpin; 
+    const prog=clamp(m.t/m.dur,0,1); 
+    const startAng = m.startAngle || 0; 
+    const ang=startAng + prog*2*Math.PI; 
+    const r=90; 
+    const sx=ps.x + Math.cos(ang)*r; 
+    const sy=ps.y + Math.sin(ang)*r;
+    
+    // Slash trail effect
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffffff';
+    const prevAng = startAng + (prog - 0.1) * 2 * Math.PI;
+    const prevSx = ps.x + Math.cos(prevAng)*r;
+    const prevSy = ps.y + Math.sin(prevAng)*r;
+    ctx.beginPath();
+    ctx.moveTo(prevSx, prevSy);
+    ctx.lineTo(sx, sy);
+    ctx.stroke();
+    ctx.restore();
+    
+    ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
+    ctx.save();
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#ffffff';
+    ctx.fillText('⚔️', sx, sy);
+    ctx.restore();
+  }
 
-  // teksty pływające
-  for(let i=fly.length-1;i>=0;i--){ const f=fly[i]; f.t-=16; const s=worldToScreen(f.x, f.y - (800-f.t)/40); if(f.t<=0){ fly.splice(i,1); continue; } ctx.save(); ctx.globalAlpha=clamp(f.t/800,0,1); ctx.fillStyle=f.color||'#fff'; ctx.font='16px system-ui, sans-serif'; ctx.fillText(f.msg, s.x+12, s.y-6); ctx.restore(); }
+  // Particles rendering
+  for(const p of particles) {
+    const s = worldToScreen(p.x, p.y);
+    ctx.save();
+    const alpha = clamp(p.t / 800, 0, 1);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  
+  // Ulepszone teksty pływające
+  for(let i=fly.length-1;i>=0;i--){ 
+    const f=fly[i]; 
+    const s=worldToScreen(f.x, f.y);
+    if(f.t<=0){ fly.splice(i,1); continue; } 
+    ctx.save();
+    ctx.globalAlpha = f.alpha || clamp(f.t/1000,0,1);
+    ctx.fillStyle = f.color||'#fff';
+    ctx.font = `bold ${(f.size || 20) * (f.scale || 1)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeText(f.msg, s.x, s.y - (1000-f.t)/20);
+    ctx.fillText(f.msg, s.x, s.y - (1000-f.t)/20);
+    ctx.restore();
+  }
 
   // toasty
   ctx.save(); ctx.font='16px system-ui, sans-serif'; ctx.textAlign='center'; let y=canvas.height-26; for(let i=toasts.length-1;i>=0;i--){ const t=toasts[i]; t.t-=16; if(t.t<=0){ toasts.splice(i,1); continue; } ctx.globalAlpha=Math.min(1,t.t/400); ctx.fillStyle='#e6e6e6'; ctx.fillText(t.msg, canvas.width/2, y); y-=20; } ctx.restore();
   
   // Mini-mapa
   drawMiniMap();
+  
+  // Restore screen shake transform
+  ctx.restore();
 }
 
 // Funkcja rysująca mini-mapę
