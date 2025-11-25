@@ -409,19 +409,23 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   background: rgba(0,0,0,.85); 
   backdrop-filter: blur(6px);
   z-index:1000; 
-  padding: 8px;
+  /* Safe area insets dla iPhone 16 i innych urządzeń z notch */
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch; /* Smooth scrolling na iOS */
   scroll-behavior: smooth;
 }
 @media (min-width: 768px) {
-  .modal { padding: 16px; }
+  .modal { 
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); 
+  }
 }
 /* Wszystkie modals zawsze na środku - usunięto specjalne pozycjonowanie dla inventory */
 .panel { 
   width: min(95vw, 900px); /* Większa maksymalna szerokość - 95% viewport na mobile, max 900px na desktop */
   max-width: 95vw; /* Zawsze 95% szerokości ekranu */
-  max-height: 95vh; /* Zwiększona wysokość - 95% viewport */
+  /* Uwzględnij safe area dla wysokości - nie przekraczaj dostępnej przestrzeni */
+  max-height: calc(100vh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)) - 32px);
   min-height: min(80vh, 500px); /* Minimalna wysokość dla lepszego wyglądu */
   overflow-y: auto; 
   overflow-x: hidden;
@@ -452,7 +456,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   .panel {
     width: 95vw;
     max-width: 95vw;
-    max-height: 95vh;
+    /* Uwzględnij safe area dla wysokości - nie przekraczaj dostępnej przestrzeni */
+    max-height: calc(100vh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)));
     padding: 20px 16px; /* Mniejszy padding na mobile, ale nadal wystarczający */
     border-radius: 16px;
   }
@@ -797,10 +802,13 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 }
 .modal-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 40px;
-  height: 40px;
+  /* Uwzględnij safe area dla pozycji przycisku zamknięcia */
+  top: max(10px, calc(env(safe-area-inset-top) + 10px));
+  right: max(10px, calc(env(safe-area-inset-right) + 10px));
+  width: 44px; /* Zwiększone dla lepszej dostępności na mobile */
+  height: 44px; /* Zwiększone dla lepszej dostępności na mobile */
+  min-width: 44px; /* Minimalny rozmiar dotykowy */
+  min-height: 44px;
   border: none;
   background: rgba(255,255,255,.1);
   border: 2px solid rgba(255,255,255,.2);
@@ -829,11 +837,11 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 }
 @media (min-width: 768px) {
   .modal-close {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     font-size: 32px;
-    top: 16px;
-    right: 16px;
+    top: max(16px, calc(env(safe-area-inset-top) + 16px));
+    right: max(16px, calc(env(safe-area-inset-right) + 16px));
   }
 }
 .btn { 
@@ -855,7 +863,15 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   align-items: center;
   gap: 8px;
   text-align: center;
-  min-height: 56px; /* Minimalna wysokość dla mobile (44px+ padding) */
+  min-height: 56px; /* Minimalna wysokość dla mobile (44px+ padding) - zgodne z wytycznymi dostępności */
+  /* Zwiększona minimalna wysokość na bardzo małych ekranach */
+}
+@media (max-width: 480px) {
+  .btn {
+    min-height: 52px; /* Nieco mniejsza na bardzo małych ekranach, ale nadal wystarczająca */
+    padding: 16px 20px;
+    font-size: 16px;
+  }
 }
 .btn:hover {
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
@@ -1316,6 +1332,120 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   #inventoryModal .panel > div[style*="font-size:24px"] {
     font-size: 20px !important;
     padding: 10px !important;
+  }
+}
+
+/* === Responsywne style dla wszystkich modali na bardzo małych ekranach (iPhone SE, iPhone 16 mini) === */
+@media (max-width: 480px) {
+  /* Start Screen - mniejsze fonty */
+  #startScreenSection h1[style*="font-size:64px"] {
+    font-size: 42px !important;
+    margin-bottom: 24px !important;
+  }
+  
+  #startScreenSection p[style*="font-size:22px"] {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+  }
+  
+  #startScreenSection div[style*="font-size:24px"] {
+    font-size: 18px !important;
+    padding: 16px !important;
+  }
+  
+  #startScreenSection div[style*="font-size:36px"] {
+    font-size: 28px !important;
+  }
+  
+  #startGameBtn {
+    font-size: 18px !important;
+    padding: 20px 32px !important;
+    min-height: 60px !important;
+  }
+  
+  /* Quest Log - mniejsze fonty */
+  h2[style*="font-size:36px"] {
+    font-size: 24px !important;
+  }
+  
+  strong[style*="font-size:26px"] {
+    font-size: 20px !important;
+  }
+  
+  p[style*="font-size:19px"] {
+    font-size: 15px !important;
+    line-height: 1.7 !important;
+  }
+  
+  /* Inventory Modal - mniejsze fonty */
+  #inventoryModal h1[style*="font-size:48px"] {
+    font-size: 36px !important;
+  }
+  
+  #inventoryModal h2[style*="font-size:32px"] {
+    font-size: 24px !important;
+  }
+  
+  #inventoryModal span[style*="font-size:36px"] {
+    font-size: 28px !important;
+  }
+  
+  /* Level Up Modal - mniejsze fonty */
+  #levelUpModal h1 {
+    font-size: 24px !important;
+  }
+  
+  #levelUpModal .btn {
+    font-size: 16px !important;
+    padding: 14px 18px !important;
+  }
+  
+  /* Dialog modals - mniejsze fonty */
+  #womanModal h1,
+  #wizardModal h1 {
+    font-size: 24px !important;
+  }
+  
+  #womanModal p[style*="font-size:18px"],
+  #wizardModal p[style*="font-size:18px"] {
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+  }
+  
+  #womanModal div[style*="font-size:18px"],
+  #wizardModal div[style*="font-size:18px"] {
+    font-size: 16px !important;
+    padding: 12px !important;
+  }
+  
+  /* Developer Menu - mniejsze fonty */
+  #devMenuModal h1 {
+    font-size: 24px !important;
+  }
+  
+  #devMenuModal h2[style*="font-size:20px"] {
+    font-size: 18px !important;
+  }
+  
+  /* Ogólne poprawki dla paneli na bardzo małych ekranach */
+  .panel {
+    padding: 16px 12px !important;
+    border-radius: 16px !important;
+  }
+  
+  .panel h1 {
+    font-size: 24px !important;
+    margin-bottom: 16px !important;
+  }
+  
+  .panel h2 {
+    font-size: 20px !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .panel p {
+    font-size: 14px !important;
+    margin: 10px 0 !important;
   }
 }
 
