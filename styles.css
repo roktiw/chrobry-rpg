@@ -1287,15 +1287,16 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 /* Responsywne style dla ekranu skarbca */
 @media (max-width: 767px) {
   #inventoryModal .panel {
-    padding: 20px 16px !important;
+    padding: 16px 12px !important;
+    max-height: calc(100vh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom)) - 32px) !important;
   }
   
   #inventoryModal h1 {
-    font-size: 36px !important;
+    font-size: 32px !important;
   }
   
   #inventoryModal h2 {
-    font-size: 24px !important;
+    font-size: 22px !important;
   }
   
   /* HP i MP zawsze obok siebie, nawet na mobile */
