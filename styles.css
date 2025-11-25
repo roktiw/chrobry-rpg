@@ -1,14 +1,14 @@
 html, body { 
   height: 100%; 
   margin: 0; 
+  padding: 0;
   background:#0b0f10; 
   color:#e6e6e6; 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-weight: 500; /* Grubsze czcionki */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Safe areas dla iOS notch i home indicator */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Użyj viewport-fit=cover w meta viewport zamiast padding */
 }
 #ui { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr; grid-template-columns: auto 1fr; pointer-events: none; }
 header, footer { padding: 4px 6px; background: linear-gradient(180deg, rgba(0,0,0,.7), rgba(0,0,0,0)); }
@@ -37,8 +37,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 /* Mini-mapa */
 .minimap {
   position: fixed;
-  top: max(8px, env(safe-area-inset-top));
-  right: max(8px, env(safe-area-inset-right));
+  top: max(12px, calc(env(safe-area-inset-top) + 8px));
+  right: max(12px, calc(env(safe-area-inset-right) + 8px));
   width: 80px;
   height: 80px;
   border: 2px solid rgba(255,255,255,0.3);
@@ -85,8 +85,8 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 /* === NOWY HUD - Modern Game Design === */
 .hud-container {
   position: fixed;
-  left: max(8px, env(safe-area-inset-left));
-  top: max(8px, env(safe-area-inset-top));
+  left: max(12px, calc(env(safe-area-inset-left) + 8px));
+  top: max(12px, calc(env(safe-area-inset-top) + 8px));
   z-index: 100;
   pointer-events: none; /* Pozwól na kliknięcie przez HUD */
   display: flex;
@@ -390,7 +390,16 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
     font-size: 11px;
   }
 }
-#canvas { width:100vw; height:100vh; touch-action:none; display:block; }
+#canvas { 
+  width: 100vw; 
+  height: 100vh; 
+  touch-action: none; 
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* Canvas zajmuje cały viewport, safe-area jest obsługiwane przez elementy UI */
+}
 .modal { 
   position: fixed; 
   inset: 0; 
@@ -966,7 +975,7 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   position: fixed;
   /* Na mobile: wyżej nad przyciskami ataku (bottom: 12px + 56px + 16px gap + 56px + 20px dodatkowy odstęp = 160px) */
   bottom: max(160px, calc(env(safe-area-inset-bottom) + 160px));
-  right: max(12px, env(safe-area-inset-right));
+  right: max(12px, calc(env(safe-area-inset-right) + 8px));
   z-index: 200;
   pointer-events: auto;
   display: flex;
@@ -979,6 +988,7 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   .action-buttons-panel {
     /* Na desktop: pod mini-mapą */
     top: max(140px, calc(env(safe-area-inset-top) + 140px));
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
     bottom: auto;
     right: 12px;
     gap: 10px;
