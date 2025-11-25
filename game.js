@@ -74,6 +74,9 @@ let state = JSON.parse(localStorage.getItem('chrobry_save_v2')) || {
   // New: nests/spawners for enemies
   nests: [], // Array of nests: { type: enemyIndex, x, y, hp, hpMax, spawnTimer, nextSpawn, id, respawnTimer }
   nestRespawns: [], // Array of pending respawns: { type: enemyIndex, timer: 30000 }
+  // Megabestie - pojawiają się po zniszczeniu 3 legowisk danego typu
+  megabeasts: [], // Array of megabeasts: { type: enemyIndex, x, y, hp, hpMax, id }
+  nestsDestroyedByType: [0, 0, 0, 0], // Licznik zniszczonych legowisk per typ [wilk, świnia, żmija, trup]
   // Achievements system
   achievements: {}, // { achievementId: true/false }
   stats: { // Statystyki do śledzenia achievmentów
@@ -96,6 +99,8 @@ if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
   if(state.lastMinuteSpawn === undefined) state.lastMinuteSpawn = 0;
   if(state.nests === undefined) state.nests = [];
   if(state.nestRespawns === undefined) state.nestRespawns = [];
+  if(state.megabeasts === undefined) state.megabeasts = [];
+  if(state.nestsDestroyedByType === undefined) state.nestsDestroyedByType = [0, 0, 0, 0];
   if(state.lives === undefined) state.lives = 3;
   if(state.achievements === undefined) state.achievements = {};
   if(state.stats === undefined) {
@@ -119,6 +124,8 @@ if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
       maxLevel: 1
     };
   }
+  if(state.lowHPWarningShown === undefined) state.lowHPWarningShown = false;
+  if(state.lowHPWarning === undefined) state.lowHPWarning = null;
 
 // Initialize trees
 if(state.trees.length === 0) {
@@ -266,7 +273,7 @@ const ACHIEVEMENTS = [
   { id: 'quest_tree', emoji: '🌳', name: 'Pierwsze Drzewo', desc: 'Zasadź swoje pierwsze drzewo', check: () => state.quests.tree },
   { id: 'quest_son', emoji: '👶', name: 'Ojciec', desc: 'Spłodź dziecko', check: () => state.quests.son },
   { id: 'quest_book', emoji: '📖', name: 'Pisarz', desc: 'Napisz książkę', check: () => state.quests.book },
-  { id: 'quest_all', emoji: '🏆', name: 'Mistrz Questów', desc: 'Ukończ wszystkie questy', check: () => state.quests.tree && state.quests.son && state.quests.book },
+  { id: 'quest_all', emoji: '🏆', name: 'Mistrz Zadań', desc: 'Ukończ wszystkie zadania', check: () => state.quests.tree && state.quests.son && state.quests.book },
   
   // Poziomy
   { id: 'level_5', emoji: '⭐', name: 'Nowicjusz', desc: 'Osiągnij poziom 5', check: () => state.stats.maxLevel >= 5 },
@@ -394,7 +401,7 @@ canvas.addEventListener('click', (e)=>{
     updateInventory();
     if(!state.quests.tree) {
       state.quests.tree = true;
-      toast('🎉 Ukończono quest: Zasadź drzewo!');
+      toast('🎉 Ukończono zadanie: Zasadź drzewo!');
       updateHUD();
     }
     return;
@@ -450,7 +457,7 @@ canvas.addEventListener('click', (e)=>{
     state.inventory.seeds++;
     const idx = state.pickups.findIndex(p => p === clickedSeed);
     if(idx >= 0) state.pickups.splice(idx, 1);
-    toast('🌱 Zebrano nasiono!');
+      toast('🌱 Zebrano ziarno!');
     updateInventory();
     return;
   }
@@ -582,6 +589,32 @@ const hudMead = document.getElementById('hudMead');
     const livesDisplay = document.getElementById('livesDisplay');
     if(livesDisplay) livesDisplay.textContent = state.lives;
   
+  // Ostrzeżenie o niskim zdrowiu (< 20%) - duży migający komunikat na środku ekranu
+  const inventoryBtn = document.getElementById('inventoryBtn');
+  if(hpPercent < 20 && state.hp > 0) {
+    if(!state.lowHPWarning) {
+      state.lowHPWarning = {
+        active: true,
+        blinkTimer: 0,
+        blinkSpeed: 500 // Czas migania w ms
+      };
+    }
+    // Dodaj klasę migania do przycisku inventory
+    if(inventoryBtn) {
+      inventoryBtn.classList.add('low-hp-blink');
+    }
+  } else {
+    // Resetuj ostrzeżenie gdy zdrowie wzrośnie powyżej 20%
+    if(state.lowHPWarning) {
+      state.lowHPWarning.active = false;
+      state.lowHPWarning = null;
+    }
+    // Usuń klasę migania z przycisku inventory
+    if(inventoryBtn) {
+      inventoryBtn.classList.remove('low-hp-blink');
+    }
+  }
+  
   // Update cooldown indicators
   const cooldownA = document.getElementById('cooldownA');
   const cooldownB = document.getElementById('cooldownB');
@@ -636,12 +669,23 @@ const quest2Status = document.getElementById('quest2Status');
 const quest3Status = document.getElementById('quest3Status');
 
 function updateQuestLog() {
-  quest1Status.textContent = state.quests.tree ? '✓ Ukończone' : 'W toku';
+  quest1Status.textContent = state.quests.tree ? '✓ Ukończone' : 'W trakcie';
   quest1Status.style.color = state.quests.tree ? '#4ade80' : '#fbbf24';
-  quest2Status.textContent = state.quests.son ? '✓ Ukończone' : 'W toku';
+  quest2Status.textContent = state.quests.son ? '✓ Ukończone' : 'W trakcie';
   quest2Status.style.color = state.quests.son ? '#4ade80' : '#fbbf24';
-  quest3Status.textContent = state.quests.book ? '✓ Ukończone' : 'W toku';
+  quest3Status.textContent = state.quests.book ? '✓ Ukończone' : 'W trakcie';
   quest3Status.style.color = state.quests.book ? '#4ade80' : '#fbbf24';
+  
+  // Aktualizuj subquesty megabestii
+  const quest3Nest0 = document.getElementById('quest3Nest0');
+  const quest3Nest1 = document.getElementById('quest3Nest1');
+  const quest3Nest2 = document.getElementById('quest3Nest2');
+  const quest3Nest3 = document.getElementById('quest3Nest3');
+  
+  if(quest3Nest0) quest3Nest0.textContent = Math.min(state.nestsDestroyedByType[0] || 0, 3);
+  if(quest3Nest1) quest3Nest1.textContent = Math.min(state.nestsDestroyedByType[1] || 0, 3);
+  if(quest3Nest2) quest3Nest2.textContent = Math.min(state.nestsDestroyedByType[2] || 0, 3);
+  if(quest3Nest3) quest3Nest3.textContent = Math.min(state.nestsDestroyedByType[3] || 0, 3);
 }
 
 function toggleQuestLog(){
@@ -670,15 +714,35 @@ document.getElementById('closeQuestBtn').addEventListener('click', ()=>{
 
 // Close button dla quest modal - używamy closeQuestBtn na końcu modala (bez modal-close X)
 
+// Funkcja do przełączania opisów questów
+function toggleQuestDescription(questNum) {
+  const description = document.getElementById(`quest${questNum}Description`);
+  const toggle = document.getElementById(`quest${questNum}Toggle`);
+  
+  if(description && toggle) {
+    const isVisible = description.style.display === 'block';
+    description.style.display = isVisible ? 'none' : 'block';
+    toggle.textContent = isVisible ? '▼' : '▲';
+  }
+}
+
 // Przyciski rozwijania opisów questów
+const quest1Toggle = document.getElementById('quest1Toggle');
+const quest2Toggle = document.getElementById('quest2Toggle');
+const quest3Toggle = document.getElementById('quest3Toggle');
+
 if(quest1Toggle) {
   quest1Toggle.addEventListener('click', () => toggleQuestDescription(1));
+  // Ustaw domyślną strzałkę na ▲ (opisy są domyślnie rozwinięte)
+  quest1Toggle.textContent = '▲';
 }
 if(quest2Toggle) {
   quest2Toggle.addEventListener('click', () => toggleQuestDescription(2));
+  quest2Toggle.textContent = '▲';
 }
 if(quest3Toggle) {
   quest3Toggle.addEventListener('click', () => toggleQuestDescription(3));
+  quest3Toggle.textContent = '▲';
 }
 
 // === Inventory Modal ===
@@ -695,6 +759,28 @@ function updateInventory() {
   invMead.textContent = state.inventory.mead;
   invSeeds.textContent = state.inventory.seeds;
   plantingModeIndicator.style.display = state.plantingMode ? 'block' : 'none';
+  
+  // Aktualizuj HP i MP w inventory modal
+  const invHP = document.getElementById('invHP');
+  const invHPMax = document.getElementById('invHPMax');
+  const invMP = document.getElementById('invMP');
+  const invMPMax = document.getElementById('invMPMax');
+  const invHPBar = document.getElementById('invHPBar');
+  const invMPBar = document.getElementById('invMPBar');
+  
+  if(invHP) invHP.textContent = Math.floor(state.hp);
+  if(invHPMax) invHPMax.textContent = state.hpMax;
+  if(invMP) invMP.textContent = Math.floor(state.mp);
+  if(invMPMax) invMPMax.textContent = state.mpMax;
+  
+  if(invHPBar) {
+    const hpPercent = (state.hp / state.hpMax) * 100;
+    invHPBar.style.width = `${hpPercent}%`;
+  }
+  if(invMPBar) {
+    const mpPercent = (state.mp / state.mpMax) * 100;
+    invMPBar.style.width = `${mpPercent}%`;
+  }
 }
 
 function toggleInventory(){
@@ -814,7 +900,7 @@ document.getElementById('invMeadClick').addEventListener('click', ()=>{
     state.inventory.mead--;
     state.mp = clamp(state.mp + mana, 0, state.mpMax);
     animateBar('mp', (oldMP/state.mpMax)*100, (state.mp/state.mpMax)*100);
-    toast(`🍾 +${mana} Mana`);
+    toast(`🍾 +${mana} Moc`);
     updateInventory();
     updateHUD();
   }
@@ -987,7 +1073,7 @@ document.getElementById('giveAppleBtn').addEventListener('click', ()=>{
       // Ukończ quest tylko przy pierwszym dziecku
       if(!state.quests.son) {
         state.quests.son = true;
-        toast('🎉 Ukończono quest: Spłodź syna!');
+        toast('🎉 Ukończono zadanie: Spłodź syna!');
       }
       spawnChild();
       // Resetuj liczniki po urodzeniu dziecka
@@ -1008,7 +1094,7 @@ document.getElementById('giveMeatBtn').addEventListener('click', ()=>{
       // Ukończ quest tylko przy pierwszym dziecku
       if(!state.quests.son) {
         state.quests.son = true;
-        toast('🎉 Ukończono quest: Spłodź syna!');
+        toast('🎉 Ukończono zadanie: Spłodź syna!');
       }
       spawnChild();
       // Resetuj liczniki po urodzeniu dziecka
@@ -1055,15 +1141,15 @@ document.getElementById('giveAllApplesBtn').addEventListener('click', ()=>{
   }
 });
 
-// Daj wszystkie mięso niewieście
+// Daj wszystkie mięsiwo niewieście
 document.getElementById('giveAllMeatBtn').addEventListener('click', ()=>{
   const needed = 50 - state.woman.givenMeat;
   if(needed <= 0) {
-    toast('✅ Masz już wszystkie wymagane mięso!');
+    toast('✅ Masz już wszystkie wymagane mięsiwo!');
     return;
   }
   if(state.inventory.meat === 0) {
-    toast('❌ Nie masz mięsa!');
+    toast('❌ Nie masz mięsiwa!');
     return;
   }
   
@@ -1156,15 +1242,15 @@ document.getElementById('wizardGiveGoldBtn').addEventListener('click', ()=>{
   }
 });
 
-// Daj wszystkie mięso czarodziejowi
+// Daj wszystkie mięsiwo czarodziejowi
 document.getElementById('wizardGiveAllMeatBtn').addEventListener('click', ()=>{
   const needed = 100 - state.wizard.givenMeat;
   if(needed <= 0) {
-    toast('✅ Masz już wszystkie wymagane mięso!');
+    toast('✅ Masz już wszystkie wymagane mięsiwo!');
     return;
   }
   if(state.inventory.meat === 0) {
-    toast('❌ Nie masz mięsa!');
+    toast('❌ Nie masz mięsiwa!');
     return;
   }
   
@@ -1234,7 +1320,7 @@ document.getElementById('wizardGiveAllGoldBtn').addEventListener('click', ()=>{
 document.getElementById('wizardCompleteBtn').addEventListener('click', ()=>{
   if(state.wizard.givenMeat >= 100 && state.wizard.givenApples >= 100 && state.wizard.givenGold >= 100) {
     state.quests.book = true;
-    toast('🎉 Ukończono quest: Napisz książkę!');
+    toast('🎉 Ukończono zadanie: Napisz książkę!');
     state.paused = false;
     wizardModal.style.display = 'none';
     updateHUD();
@@ -1386,6 +1472,48 @@ function spawnNest(enemyTypeIndex) {
   });
 }
 
+// Funkcja do obsługi zniszczenia legowiska
+function handleNestDestroyed(nest) {
+  // Aktualizuj licznik zniszczonych legowisk per typ
+  if(nest.type >= 0 && nest.type < state.nestsDestroyedByType.length) {
+    state.nestsDestroyedByType[nest.type]++;
+    
+    // Sprawdź czy powinna się pojawić megabestia (po 3 zniszczonych legowiskach danego typu)
+    if(state.nestsDestroyedByType[nest.type] >= 3 && 
+       !state.megabeasts.some(mb => mb.type === nest.type)) {
+      spawnMegabeast(nest.type, nest.x, nest.y);
+    }
+  }
+}
+
+// Funkcja do spawnu megabestii
+function spawnMegabeast(enemyTypeIndex, nearX, nearY) {
+  const enemyDef = ENEMIES[enemyTypeIndex];
+  if(!enemyDef) return;
+  
+  // Spawn megabestii w pobliżu zniszczonego legowiska
+  const ang = rand(0, Math.PI*2);
+  const dist = rand(200, 400);
+  const mx = (nearX + Math.cos(ang)*dist + state.world.width) % state.world.width;
+  const my = (nearY + Math.sin(ang)*dist + state.world.height) % state.world.height;
+  
+  // Megabestia ma 3x więcej HP niż normalny potwór
+  const hpMax = enemyDef.hp * 3;
+  
+  state.megabeasts.push({
+    type: enemyTypeIndex,
+    x: mx,
+    y: my,
+    hp: hpMax,
+    hpMax: hpMax,
+    id: Math.random().toString(36).slice(2)
+  });
+  
+  const enemyNames = ['Wilk', 'Dzika świnia', 'Żmija', 'Trup'];
+  const enemyName = enemyNames[enemyTypeIndex] || 'Potwór';
+  toast(`⚠️ MEGABESTIA ${enemyDef.emoji} ${enemyName} pojawiła się!`);
+}
+
 function spawnInitial(){
   // Spawn nests for each enemy type
   for(let i = 0; i < ENEMIES.length; i++) {
@@ -1433,7 +1561,24 @@ function fireArrow(target){
   const len = Math.hypot(ax, ay) || 1; 
   const vx = (ax/len)*6.0; 
   const vy = (ay/len)*6.0;
-  state.projectiles.push({ x:state.pos.x, y:state.pos.y, vx, vy, ttl: 6000, dmg: state.rangedDamage, emoji:'🏹' });
+  // Dodaj trail history dla animacji strzały - więcej punktów dla płynniejszego trail
+  const arrowTrail = [];
+  for(let i = 0; i < 12; i++) {
+    arrowTrail.push({ x: state.pos.x, y: state.pos.y });
+  }
+  
+  state.projectiles.push({ 
+    x: state.pos.x, 
+    y: state.pos.y, 
+    vx, 
+    vy, 
+    ttl: 6000, 
+    dmg: state.rangedDamage, 
+    emoji: '🏹',
+    trail: arrowTrail, // Historia pozycji dla trail effect
+    rotation: Math.atan2(vy, vx) // Kąt rotacji strzały
+  });
+  
   state.lastAttackType = 'ranged'; // Zapisz typ ataku dla dzieci
 }
 
@@ -1723,6 +1868,9 @@ function addScreenShake(intensity = 5, duration = 100) {
 // Hit flash system for enemies
 let enemyHitFlashes = {}; // {enemyId: {t: timeRemaining}}
 
+// Hit flash system for nests (siedliska)
+let nestHitFlashes = {}; // {nestId: {t: timeRemaining}}
+
 // Particle system for effects
 let particles = [];
 function spawnParticles(x, y, count, color, type = 'spark') {
@@ -1776,6 +1924,23 @@ function step(dt){
     enemyHitFlashes[id] -= dt;
     if(enemyHitFlashes[id] <= 0) {
       delete enemyHitFlashes[id];
+    }
+  }
+  
+  // Update nest hit flashes
+  for(const id in nestHitFlashes) {
+    nestHitFlashes[id] -= dt;
+    if(nestHitFlashes[id] <= 0) {
+      delete nestHitFlashes[id];
+    }
+  }
+  
+  // Update low HP warning blink timer
+  if(state.lowHPWarning && state.lowHPWarning.active) {
+    state.lowHPWarning.blinkTimer += dt;
+    // Reset timer when it exceeds blink speed
+    if(state.lowHPWarning.blinkTimer >= state.lowHPWarning.blinkSpeed) {
+      state.lowHPWarning.blinkTimer = 0;
     }
   }
   
@@ -1939,7 +2104,44 @@ function step(dt){
       }
     }
     
-    // Check for nest hits
+    // Check for megabeast hits
+    for(const mb of state.megabeasts) {
+      if(m.hit.has(mb.id)) continue;
+      let dx = mb.x - sx, dy = mb.y - sy;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      if(Math.hypot(dx, dy) < 40) { // Nieco większy zasięg dla megabestii
+        m.hit.add(mb.id);
+        mb.hp -= state.meleeDamage;
+        floatingText(`-${state.meleeDamage}`, mb.x, mb.y, '#ff0000', 28, 1200); // Czerwony kolor dla megabestii
+        
+        // Hit flash effect
+        if(!enemyHitFlashes[mb.id]) enemyHitFlashes[mb.id] = 0;
+        enemyHitFlashes[mb.id] = 150;
+        
+        // Particles on hit
+        spawnParticles(mb.x, mb.y, 12, '#ff0000', 'spark');
+        
+        if(mb.hp <= 0) {
+          // Megabestia pokonana - drop 30 monet
+          for(let i = 0; i < 30; i++) {
+            const dropDir = {x: rand(-1, 1), y: rand(-1, 1)};
+            spawnPickup('gold', mb.x, mb.y, 1, dropDir);
+          }
+          
+          const mbIdx = state.megabeasts.findIndex(m => m.id === mb.id);
+          if(mbIdx >= 0) {
+            state.megabeasts.splice(mbIdx, 1);
+            const enemyDef = ENEMIES[mb.type];
+            const enemyNames = ['Wilka', 'Dzikiej świni', 'Żmii', 'Trupa'];
+            const enemyName = enemyNames[mb.type] || 'Potwora';
+            toast(`💀 MEGABESTIA ${enemyDef.emoji} ${enemyName} pokonana! +30 monet!`);
+          }
+        }
+      }
+    }
+    
+    // Check for nest hits (kamień i emoji mają ten sam hitbox - kolizja na pozycji nest.x, nest.y)
     for(const nest of state.nests) {
       if(m.hit.has(nest.id)) continue; // Prevent multiple hits per spin
       // Handle wrap-around distance
@@ -1949,7 +2151,13 @@ function step(dt){
       if(Math.hypot(dx, dy) < 30) { // Same range as enemy hit
         m.hit.add(nest.id);
         nest.hp -= state.meleeDamage;
-        floatingText(`-${state.meleeDamage}`, nest.x, nest.y, '#8B4513'); // Brown color for nest damage
+        floatingText(`-${state.meleeDamage}`, nest.x, nest.y, '#8B4513', 24, 1200); // Brown color for nest damage
+        
+        // Hit flash effect - klasyczne mruganie jak w starych grach
+        nestHitFlashes[nest.id] = 150; // 150ms flash dla siedlisk
+        
+        // Particles on hit
+        spawnParticles(nest.x, nest.y, 8, '#8B4513', 'spark');
         
         if(nest.hp <= 0) {
           // Nest destroyed, drop items and schedule respawn
@@ -1966,10 +2174,13 @@ function step(dt){
           const totalDropCount = baseDropCount + extraDrops;
           
           for(let i = 0; i < totalDropCount; i++) {
-            const dropDir = {x: rand(-0.8, 0.8), y: -0.5};
+            // Spawn bez direction - bez bouncing, od razu gotowe do zbierania
             const dropTypes = ['meat', 'apple', 'mead', 'gold', 'seed'];
             const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
-            spawnPickup(dropType, nest.x, nest.y, undefined, dropDir);
+            // Małe losowe przesunięcie pozycji, ale bez fizyki bouncing
+            const offsetX = nest.x + rand(-30, 30);
+            const offsetY = nest.y + rand(-30, 30);
+            spawnPickup(dropType, offsetX, offsetY, undefined, undefined);
           }
           
           // Schedule respawn after 30 seconds
@@ -1981,6 +2192,8 @@ function step(dt){
           const nestIdx = state.nests.findIndex(n => n.id === nest.id);
           if(nestIdx >= 0) {
             state.nests.splice(nestIdx, 1);
+            state.stats.nestsDestroyed++;
+            handleNestDestroyed(nest);
             const extraText = extraDrops > 0 ? ` (+${extraDrops} ekstra!)` : '';
             toast(`🏰 Legowisko zniszczone! +${totalDropCount} przedmiotów${extraText}`);
           }
@@ -2455,6 +2668,12 @@ function step(dt){
             const len = Math.hypot(edx, edy) || 1;
             const vx = (edx / len) * 5.0; // Nieco wolniejsza niż gracz
             const vy = (edy / len) * 5.0;
+            // Dodaj trail history dla animacji strzały dziecka
+            const childArrowTrail = [];
+            for(let j = 0; j < 5; j++) {
+              childArrowTrail.push({ x: child.x, y: child.y });
+            }
+            
             state.projectiles.push({ 
               x: child.x, 
               y: child.y, 
@@ -2463,7 +2682,9 @@ function step(dt){
               ttl: 6000, 
               dmg: state.level, 
               emoji: '🏹',
-              fromChild: true // Oznacz że to od dziecka
+              fromChild: true, // Oznacz że to od dziecka
+              trail: childArrowTrail, // Historia pozycji dla trail effect
+              rotation: Math.atan2(vy, vx) // Kąt rotacji strzały
             });
           }
         }
@@ -2560,6 +2781,17 @@ function step(dt){
 
   for(let i=state.projectiles.length-1;i>=0;i--){
     const pr = state.projectiles[i]; 
+    
+    // Aktualizuj trail history
+    if(pr.trail) {
+      // Dodaj aktualną pozycję na początek trail
+      pr.trail.unshift({ x: pr.x, y: pr.y });
+      // Ogranicz długość trail do 15 pozycji dla dłuższego, bardziej widocznego trail
+      if(pr.trail.length > 15) {
+        pr.trail.pop();
+      }
+    }
+    
     pr.x+=pr.vx; 
     pr.y+=pr.vy; 
     // Wrap-around for projectiles
@@ -2583,6 +2815,9 @@ function step(dt){
         e.hp -= pr.dmg; 
         floatingText(`-${pr.dmg}`, e.x, e.y, '#ff6a6a');
         
+        // Hit flash effect
+        enemyHitFlashes[e.id] = 100; // 100ms flash
+        
         // Knockback
         const nx = dx / dist || 0;
         const ny = dy / dist || 0;
@@ -2598,6 +2833,116 @@ function step(dt){
         break; 
       } 
     }
+    
+    // Check collision with megabeasts
+    const megabeastRange = 45; // Większy zasięg dla megabestii
+    for(const mb of state.megabeasts) {
+      let dx = mb.x - pr.x, dy = mb.y - pr.y;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      const dist = Math.hypot(dx, dy);
+      
+      if(dist > megabeastRange) continue;
+      
+      if(dist < 40) { // Większy hitbox dla megabestii
+        mb.hp -= pr.dmg;
+        floatingText(`-${pr.dmg}`, mb.x, mb.y, '#ff0000', 28, 1200); // Czerwony kolor
+        
+        // Hit flash effect
+        if(!enemyHitFlashes[mb.id]) enemyHitFlashes[mb.id] = 0;
+        enemyHitFlashes[mb.id] = 150;
+        
+        // Particles on hit
+        spawnParticles(mb.x, mb.y, 12, '#ff0000', 'spark');
+        
+        pr.ttl = 0;
+        
+        if(mb.hp <= 0) {
+          // Megabestia pokonana - drop 30 monet
+          for(let i = 0; i < 30; i++) {
+            const dropDir = {x: rand(-1, 1), y: rand(-1, 1)};
+            spawnPickup('gold', mb.x, mb.y, 1, dropDir);
+          }
+          
+          const mbIdx = state.megabeasts.findIndex(m => m.id === mb.id);
+          if(mbIdx >= 0) {
+            state.megabeasts.splice(mbIdx, 1);
+            const enemyDef = ENEMIES[mb.type];
+            const enemyNames = ['Wilka', 'Dzikiej świni', 'Żmii', 'Trupa'];
+            const enemyName = enemyNames[mb.type] || 'Potwora';
+            toast(`💀 MEGABESTIA ${enemyDef.emoji} ${enemyName} pokonana! +30 monet!`);
+          }
+        }
+        break;
+      }
+    }
+    
+    // Check collision with nests (siedliska) - kamień i emoji mają ten sam hitbox
+    const nestRange = 40; // Nieco większy zasięg dla siedlisk (są większe)
+    for(const nest of state.nests) {
+      let dx = nest.x - pr.x, dy = nest.y - pr.y;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      const dist = Math.hypot(dx, dy);
+      
+      // Early exit if too far
+      if(dist > nestRange) continue;
+      
+      if(dist < 35) { // Nieco większy hitbox dla siedlisk
+        nest.hp -= pr.dmg;
+        floatingText(`-${pr.dmg}`, nest.x, nest.y, '#8B4513', 24, 1200); // Brown color for nest damage
+        
+        // Hit flash effect - klasyczne mruganie
+        nestHitFlashes[nest.id] = 150; // 150ms flash
+        
+        // Particles on hit
+        spawnParticles(nest.x, nest.y, 8, '#8B4513', 'spark');
+        
+        pr.ttl = 0;
+        
+        if(nest.hp <= 0) {
+          // Nest destroyed, drop items and schedule respawn
+          const baseDropCount = 10;
+          
+          // Dodatkowe dropy: 1 szansa 10% za każdy level gracza
+          let extraDrops = 0;
+          for(let i = 0; i < state.level; i++) {
+            if(Math.random() < 0.1) {
+              extraDrops++;
+            }
+          }
+          
+          const totalDropCount = baseDropCount + extraDrops;
+          
+          for(let i = 0; i < totalDropCount; i++) {
+            // Spawn bez direction - bez bouncing, od razu gotowe do zbierania
+            const dropTypes = ['meat', 'apple', 'mead', 'gold', 'seed'];
+            const dropType = dropTypes[Math.floor(Math.random() * dropTypes.length)];
+            // Małe losowe przesunięcie pozycji, ale bez fizyki bouncing
+            const offsetX = nest.x + rand(-30, 30);
+            const offsetY = nest.y + rand(-30, 30);
+            spawnPickup(dropType, offsetX, offsetY, undefined, undefined);
+          }
+          
+          // Schedule respawn after 30 seconds
+          state.nestRespawns.push({
+            type: nest.type,
+            timer: 30000
+          });
+          
+          const nestIdx = state.nests.findIndex(n => n.id === nest.id);
+          if(nestIdx >= 0) {
+            state.nests.splice(nestIdx, 1);
+            state.stats.nestsDestroyed++;
+            handleNestDestroyed(nest);
+            const extraText = extraDrops > 0 ? ` (+${extraDrops} ekstra!)` : '';
+            toast(`💥 Zniszczono legowisko!${extraText}`);
+          }
+        }
+        break;
+      }
+    }
+    
     if(pr.ttl<=0) state.projectiles.splice(i,1);
   }
 
@@ -2655,15 +3000,17 @@ function step(dt){
       spawnParticles(p.x, p.y, 5, '#4ade80', 'pickup');
       
       if(p.kind==='meat'){ 
-        state.inventory.meat++;
-        floatingText('+Mięso', p.x, p.y, '#f59e0b', 16, 800);
-        toast('🍖 +Mięso');
+        const meatValue = p.value || 1;
+        state.inventory.meat += meatValue;
+        floatingText(`+${meatValue} Mięsiwo`, p.x, p.y, '#f59e0b', 16, 800);
+        toast(`🍖 +${meatValue} Mięsiwo`);
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='mead'){ 
-        state.inventory.mead++;
-        floatingText('+Flaszka', p.x, p.y, '#8b5cf6', 16, 800);
-        toast('🍾 +Flaszka');
+        const meadValue = p.value || 1;
+        state.inventory.mead += meadValue;
+        floatingText(`+${meadValue} Flaszka`, p.x, p.y, '#8b5cf6', 16, 800);
+        toast(`🍾 +${meadValue} Flaszka`);
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='gold'){ 
@@ -2680,9 +3027,10 @@ function step(dt){
         spawnParticles(p.x, p.y, 8, '#fbbf24', 'spark');
       }
       if(p.kind==='apple'){ 
-        state.inventory.apples++;
-        floatingText('+Jabłko', p.x, p.y, '#ef4444', 16, 800);
-        toast('🍎 +Jabłko');
+        const appleValue = p.value || 1;
+        state.inventory.apples += appleValue;
+        floatingText(`+${appleValue} Jabłko`, p.x, p.y, '#ef4444', 16, 800);
+        toast(`🍎 +${appleValue} Jabłko`);
         triggerPlayerReaction('pickup');
         // 10% chance to drop seed
         if(Math.random() < 0.1) {
@@ -2692,15 +3040,17 @@ function step(dt){
         }
       }
       if(p.kind==='seed') {
-        state.inventory.seeds++;
-        floatingText('+Nasiono', p.x, p.y, '#10b981', 16, 800);
-        toast('🌱 +Nasiono');
+        const seedValue = p.value || 1;
+        state.inventory.seeds += seedValue;
+        floatingText(`+${seedValue} Ziarno`, p.x, p.y, '#10b981', 16, 800);
+        toast(`🌱 +${seedValue} Ziarno`);
         triggerPlayerReaction('pickup');
       }
       if(p.kind==='wood') {
-        state.inventory.wood++;
-        floatingText('+Drewno', p.x, p.y, '#8b4513', 16, 800);
-        toast('🪵 +Drewno');
+        const woodValue = p.value || 1;
+        state.inventory.wood += woodValue;
+        floatingText(`+${woodValue} Drewno`, p.x, p.y, '#8b4513', 16, 800);
+        toast(`🪵 +${woodValue} Drewno`);
         triggerPlayerReaction('pickup');
       }
       state.pickups.splice(i,1); updateHUD();
@@ -2814,28 +3164,83 @@ function draw(){
         ctx.fillText('🏠', s.x, s.y);
   });
 
+  // Megabeasts - większe i bardziej widoczne niż normalne potwory
+  ctx.font='80px "Apple Color Emoji", "Segoe UI Emoji"'; // Megabestie są większe
+  for(const mb of state.megabeasts) {
+    renderWithWrapAround(mb.x, mb.y, (s) => {
+      const enemyDef = ENEMIES[mb.type];
+      const mbEmoji = enemyDef ? enemyDef.emoji : '👹';
+      
+      // Hit flash effect
+      const isFlashing = enemyHitFlashes[mb.id] && enemyHitFlashes[mb.id] > 0;
+      
+      if(isFlashing) {
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = '#ffffff';
+        ctx.fillText(mbEmoji, s.x, s.y);
+        ctx.restore();
+      } else {
+        // Efekt świecenia dla megabestii
+        ctx.save();
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#ff0000';
+        ctx.fillText(mbEmoji, s.x, s.y);
+        ctx.restore();
+      }
+      
+      // Show HP bar (zawsze widoczny, większy)
+      const hpPercent = mb.hp / mb.hpMax;
+      const barWidth = 70;
+      const barHeight = 8;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(s.x - barWidth/2, s.y - 60, barWidth, barHeight);
+      ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
+      ctx.fillRect(s.x - barWidth/2, s.y - 60, barWidth * hpPercent, barHeight);
+      ctx.fillStyle = '#e6e6e6';
+    });
+  }
+
   // Nests - optimized rendering (show animal emoji for each nest type)
   // Legowiska są 2x większe od normalnych mobów (wrogowie: 30px, legowiska: 60px)
   ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
   for(const nest of state.nests) {
     renderWithWrapAround(nest.x, nest.y, (s) => {
-      // Kamień pod legowiskiem (2.5x większy)
+      // Hit flash effect - klasyczne mruganie jak w starych grach na automatach
+      const isFlashing = nestHitFlashes[nest.id] && nestHitFlashes[nest.id] > 0;
+      
+      // Kamień pod legowiskiem (2.5x większy) - też miga
       ctx.save();
       ctx.font='75px "Apple Color Emoji", "Segoe UI Emoji"'; // 30px * 2.5 = 75px
-      ctx.globalAlpha = 0.8;
+      if(isFlashing) {
+        ctx.globalAlpha = 0.9;
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#ffffff';
+      } else {
+        ctx.globalAlpha = 0.8;
+      }
       ctx.fillText('🪨', s.x, s.y + 20); // Przesunięty w dół
       ctx.globalAlpha = 1;
       ctx.restore();
       
-      // Emoji legowiska (zwierzę)
+      // Emoji legowiska (zwierzę) - miga przy trafieniu
       ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
       const enemyDef = ENEMIES[nest.type];
-      if(enemyDef) {
-        // Show animal emoji (e.g., 🐺 for wolf nest, 🐗 for boar nest, etc.)
-        ctx.fillText(enemyDef.emoji, s.x, s.y);
+      const nestEmoji = enemyDef ? enemyDef.emoji : '🏰';
+      
+      if(isFlashing) {
+        // Klasyczne mruganie - biały flash z cieniem
+        ctx.save();
+        ctx.globalAlpha = 0.9;
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#ffffff';
+        ctx.fillText(nestEmoji, s.x, s.y);
+        ctx.restore();
       } else {
-        ctx.fillText('🏰', s.x, s.y); // Fallback
+        ctx.fillText(nestEmoji, s.x, s.y);
       }
+      
       // Show HP bar (zawsze widoczny)
       const hpPercent = nest.hp / nest.hpMax;
       const barWidth = 50;
@@ -3022,19 +3427,113 @@ function draw(){
         ctx.fillText('🧙', s.x, s.y);
   });
 
-  // projectiles - optimized rendering
-          ctx.font='24px "Apple Color Emoji", "Segoe UI Emoji"'; 
+  // projectiles - optimized rendering with enhanced trail effect
+  // Rozmiar projectile = bazowy (24px) + 1px * poziom
+  const projectileFontSize = 24 + state.level;
+  ctx.font=`${projectileFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`; 
   for(const pr of state.projectiles){ 
     renderWithWrapAround(pr.x, pr.y, (s) => {
-          ctx.fillText(pr.emoji, s.x, s.y); 
+      // Ulepszony trail effect - dynamiczna animacja lecącej strzały
+      if(pr.trail && pr.trail.length > 1) {
+        ctx.save();
+        
+        // Rysuj trail jako gradient od jasnego do ciemnego z efektem świetlnym
+        for(let i = 0; i < pr.trail.length - 1; i++) {
+          const t1 = pr.trail[i];
+          const t2 = pr.trail[i + 1];
+          const s1 = worldToScreen(t1.x, t1.y);
+          const s2 = worldToScreen(t2.x, t2.y);
+          
+          // Alpha zmniejsza się wzdłuż trail - bardziej wyraźny efekt
+          const progress = i / (pr.trail.length - 1);
+          const alpha = (1 - progress) * 0.8; // Większa alpha dla bardziej widocznego trail
+          ctx.globalAlpha = alpha;
+          
+          // Gradient kolorów MP - od jasnego niebieskiego do ciemnego
+          const intensity = 1 - progress;
+          const r = Math.floor(59 + (100 * intensity)); // Od ciemnego do jasnego niebieskiego
+          const g = Math.floor(130 + (125 * intensity));
+          const b = Math.floor(246 * intensity);
+          ctx.strokeStyle = `rgb(${r}, ${g}, ${b})`;
+          
+          // Grubość linii zmniejsza się wzdłuż trail - grubszy trail
+          ctx.lineWidth = 8 - (progress * 6);
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          // Większy shadow blur dla efektu świetlnego - niebieski
+          ctx.shadowBlur = 20 * intensity;
+          ctx.shadowColor = `rgba(59, 130, 246, ${intensity * 0.8})`;
+          
+          ctx.beginPath();
+          ctx.moveTo(s1.x, s1.y);
+          ctx.lineTo(s2.x, s2.y);
+          ctx.stroke();
+          
+          // Dodatkowy efekt świetlny - małe kółka wzdłuż trail - niebieski
+          if(i % 2 === 0 && intensity > 0.3) {
+            ctx.save();
+            ctx.globalAlpha = intensity * 0.4;
+            ctx.fillStyle = `rgba(96, 165, 250, ${intensity})`;
+            ctx.shadowBlur = 15 * intensity;
+            ctx.shadowColor = `rgba(59, 130, 246, ${intensity})`;
+            ctx.beginPath();
+            ctx.arc(s1.x, s1.y, 3 * intensity, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+        
+        ctx.restore();
+      } else {
+        // Fallback - prosty trail dla starych strzał - niebieski (MP)
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#3b82f6';
+        const trailLength = 15;
+        const trailX = s.x - pr.vx * trailLength;
+        const trailY = s.y - pr.vy * trailLength;
+        ctx.beginPath();
+        ctx.moveTo(trailX, trailY);
+        ctx.lineTo(s.x, s.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      
+      // Strzała z rotacją i intensywnym świeceniem
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      if(pr.rotation !== undefined) {
+        ctx.rotate(pr.rotation);
+      }
+      
+      // Większy shadow blur dla bardziej widocznego efektu świetlnego
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = 'rgba(255, 200, 0, 0.9)';
+      
+      // Dodatkowy efekt glow - rysuj większą, półprzezroczystą kopię
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'rgba(255, 180, 0, 0.6)';
+      ctx.scale(1.2, 1.2);
+      ctx.fillText(pr.emoji, 0, 0);
+      ctx.restore();
+      
+      // Główna strzała
+      ctx.fillText(pr.emoji, 0, 0);
+      ctx.restore();
     });
   }
 
   // player — mężczyzna z wąsami (używamy 🧔 jako styl moustache) lub reakcja emoji
-  // Rozmiar gracza = bazowy (34px) + 0.25 * poziom
+  // Rozmiar gracza = bazowy (34px) + 1px * poziom
   const heroEmoji = state.playerReaction.emoji || '🧔';
   const ps=worldToScreen(state.pos.x, state.pos.y);
-  const playerFontSize = 34 + (state.level * 0.25);
+  const playerFontSize = 34 + state.level;
   ctx.font=`${playerFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
   ctx.fillText(heroEmoji, ps.x, ps.y);
 
@@ -3064,7 +3563,9 @@ function draw(){
     ctx.stroke();
     ctx.restore();
     
-    ctx.font='28px "Apple Color Emoji", "Segoe UI Emoji"';
+    // Rozmiar miecza = bazowy (28px) + 1px * poziom
+    const swordFontSize = 28 + state.level;
+    ctx.font=`${swordFontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
     ctx.save();
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#ffffff';
@@ -3107,6 +3608,68 @@ function draw(){
     ctx.restore();
   }
 
+  // Ostrzeżenie o niskim zdrowiu - duży migający komunikat na środku ekranu
+  if(state.lowHPWarning && state.lowHPWarning.active) {
+    ctx.save();
+    // Oblicz alpha dla migania (0.3 - 1.0)
+    const blinkPhase = (state.lowHPWarning.blinkTimer / state.lowHPWarning.blinkSpeed) * Math.PI * 2;
+    const alpha = 0.3 + (Math.sin(blinkPhase) + 1) / 2 * 0.7; // Od 0.3 do 1.0
+    
+    // Tło z półprzezroczystym czarnym overlay
+    ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.6})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Duży komunikat na środku ekranu
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    
+    // Tło dla komunikatu
+    const padding = 40;
+    const text = '⚠️ NISKIE ZDROWIE! ⚠️';
+    const subText = 'Ulecz się jabłkami lub mięsiwem!';
+    
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Zmierz tekst - najpierw główny tekst
+    const textMetrics = ctx.measureText(text);
+    // Zmierz podtekst z odpowiednim fontem
+    ctx.font = 'bold 28px system-ui, sans-serif';
+    const subTextMetrics = ctx.measureText(subText);
+    const textWidth = Math.max(textMetrics.width, subTextMetrics.width);
+    const textHeight = 60 + 40; // Główny tekst + odstęp + podtekst
+    
+    // Rysuj tło komunikatu z gradientem
+    const gradient = ctx.createLinearGradient(centerX - textWidth/2 - padding, centerY - textHeight/2 - padding, centerX + textWidth/2 + padding, centerY + textHeight/2 + padding);
+    gradient.addColorStop(0, `rgba(239, 68, 68, ${alpha * 0.9})`);
+    gradient.addColorStop(1, `rgba(220, 38, 38, ${alpha * 0.9})`);
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(centerX - textWidth/2 - padding, centerY - textHeight/2 - padding, textWidth + padding * 2, textHeight + padding * 2);
+    
+    // Obramowanie
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(centerX - textWidth/2 - padding, centerY - textHeight/2 - padding, textWidth + padding * 2, textHeight + padding * 2);
+    
+    // Główny tekst
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = `rgba(239, 68, 68, ${alpha})`;
+    ctx.fillText(text, centerX, centerY - 20);
+    
+    // Podtekst
+    ctx.font = 'bold 28px system-ui, sans-serif';
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = `rgba(239, 68, 68, ${alpha * 0.7})`;
+    ctx.fillText(subText, centerX, centerY + 40);
+    
+    ctx.restore();
+  }
+  
   // toasty
   ctx.save(); ctx.font='16px system-ui, sans-serif'; ctx.textAlign='center'; let y=canvas.height-26; for(let i=toasts.length-1;i>=0;i--){ const t=toasts[i]; t.t-=16; if(t.t<=0){ toasts.splice(i,1); continue; } ctx.globalAlpha=Math.min(1,t.t/400); ctx.fillStyle='#e6e6e6'; ctx.fillText(t.msg, canvas.width/2, y); y-=20; } ctx.restore();
   

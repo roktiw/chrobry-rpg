@@ -110,12 +110,13 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   background: linear-gradient(135deg, rgba(0,0,0,0.85), rgba(20,20,30,0.9));
   border: 2px solid rgba(255,255,255,0.15);
   border-radius: 12px;
-  padding: 10px;
+  padding: 8px; /* Zmniejszony padding na mobile */
   box-shadow: 0 4px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);
   backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px; /* Zmniejszony gap na mobile */
+  width: fit-content; /* Dopasuj szerokość do zawartości */
 }
 
 @media (min-width: 768px) {
@@ -187,12 +188,14 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   border: 1px solid rgba(255,255,255,0.1);
   position: relative;
   box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+  width: 80px; /* Skrócone do minimum na mobile */
 }
 
 @media (min-width: 768px) {
   .hud-bar {
     height: 8px;
     border-radius: 8px;
+    width: 120px; /* Większe na desktop */
   }
 }
 
@@ -230,6 +233,13 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Ukryj dolną ramkę HUD na mobile */
+@media (max-width: 767px) {
+  .hud-stats-section {
+    display: none;
+  }
 }
 
 @media (min-width: 768px) {
@@ -387,52 +397,112 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
   display:none; 
   align-items:center; 
   justify-content:center; 
-  background: rgba(0,0,0,.75); 
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,.85); 
+  backdrop-filter: blur(6px);
   z-index:1000; 
-  padding: 12px;
+  padding: 8px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling na iOS */
+  scroll-behavior: smooth;
 }
 @media (min-width: 768px) {
-  .modal { padding: 20px; }
+  .modal { padding: 16px; }
 }
-/* Modal inventory - przesunięty w prawo aby nie zasłaniał HUDa */
-#inventoryModal {
-  justify-content: flex-end;
-  padding-right: 12px;
-  padding-left: 180px; /* Zostaw miejsce na HUD po lewej */
-}
-@media (max-width: 767px) {
-  #inventoryModal {
-    padding-left: 100px; /* Mniej miejsca na mobile, HUD jest węższy */
-  }
-}
-@media (min-width: 768px) {
-  #inventoryModal {
-    padding-left: 200px;
-    padding-right: 20px;
-  }
-}
+/* Wszystkie modals zawsze na środku - usunięto specjalne pozycjonowanie dla inventory */
 .panel { 
-  width:min(680px,100%); 
-  max-height:90vh; 
-  overflow-y:auto; 
-  background: rgba(20,25,30,.95); 
-  border:2px solid rgba(255,255,255,.2); 
-  border-radius:16px; 
-  padding:20px; 
-  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  width: min(95vw, 900px); /* Większa maksymalna szerokość - 95% viewport na mobile, max 900px na desktop */
+  max-width: 95vw; /* Zawsze 95% szerokości ekranu */
+  max-height: 95vh; /* Zwiększona wysokość - 95% viewport */
+  min-height: min(80vh, 500px); /* Minimalna wysokość dla lepszego wyglądu */
+  overflow-y: auto; 
+  overflow-x: hidden;
+  background: rgba(20,25,30,.98); 
+  border:3px solid rgba(255,255,255,.25); 
+  border-radius:20px; 
+  padding: 24px 20px; /* Większy padding dla lepszego scrollowania */
+  box-shadow: 0 20px 60px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.1);
   position: relative;
   font-weight: 500;
-  font-size: 16px; /* Większy bazowy font */
+  font-size: 16px;
+  margin: auto; /* Wyśrodkowanie */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling na iOS */
+  /* Lepsze przewijanie na mobile - większy padding wewnętrzny */
+  scroll-padding: 20px;
 }
 @media (min-width: 768px) {
-  .panel { padding:32px; border-radius:24px; font-size: 18px; }
+  .panel { 
+    padding: 40px 36px; 
+    border-radius: 28px; 
+    font-size: 18px;
+    width: min(90vw, 1000px); /* Jeszcze większa szerokość na desktop */
+    max-width: 90vw;
+  }
+}
+@media (max-width: 767px) {
+  .panel {
+    width: 95vw;
+    max-width: 95vw;
+    max-height: 95vh;
+    padding: 20px 16px; /* Mniejszy padding na mobile, ale nadal wystarczający */
+    border-radius: 16px;
+  }
+}
+
+/* === Custom Scrollbar dla lepszego przewijania === */
+.panel::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  margin: 8px;
+}
+
+.panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+
+.panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.panel::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Firefox scrollbar */
+.panel {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 767px) {
+  .panel::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .panel::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.4); /* Bardziej widoczny na mobile */
+    border: 1px solid rgba(0, 0, 0, 0.3);
+  }
 }
 
 /* === Stats Panel - Redesigned === */
 .stats-panel {
-  max-width: 600px;
+  max-width: 95vw; /* Zgodnie z nowym designem - maksymalna szerokość */
   width: 100%;
+}
+@media (min-width: 768px) {
+  .stats-panel {
+    max-width: min(90vw, 1000px); /* Większa szerokość na desktop */
+  }
 }
 
 .stats-header {
@@ -891,62 +961,103 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 @media (min-width: 768px) {
   .mobile-buttons { gap:12px; }
 }
-/* === Panel przycisków akcji - prawa strona pod mini-mapą === */
+/* === Panel przycisków akcji - nad przyciskami ataku (mobile) === */
 .action-buttons-panel {
   position: fixed;
-  top: max(96px, calc(env(safe-area-inset-top) + 96px)); /* Pod mini-mapą (80px + 8px gap + 8px) */
-  right: max(8px, env(safe-area-inset-right));
+  /* Na mobile: wyżej nad przyciskami ataku (bottom: 12px + 56px + 16px gap + 56px + 20px dodatkowy odstęp = 160px) */
+  bottom: max(160px, calc(env(safe-area-inset-bottom) + 160px));
+  right: max(12px, env(safe-area-inset-right));
   z-index: 200;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px; /* Taki sam gap jak przyciski ataku */
   align-items: center;
 }
 
 @media (min-width: 768px) {
   .action-buttons-panel {
-    top: max(140px, calc(env(safe-area-inset-top) + 140px)); /* Pod mini-mapą (120px + 12px gap + 8px) */
+    /* Na desktop: pod mini-mapą */
+    top: max(140px, calc(env(safe-area-inset-top) + 140px));
+    bottom: auto;
     right: 12px;
     gap: 10px;
   }
 }
 
 .action-btn-item {
-  width: 56px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(0,0,0,0.9), rgba(20,20,30,0.95));
-  border: 2px solid rgba(255,255,255,0.2);
-  border-radius: 12px;
-  font-size: 24px;
+  /* DOKŁADNIE IDENTYCZNE właściwości jak .action-btn - mobile first */
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: 50% !important;
+  background: rgba(0,0,0,.7) !important;
+  border: 2px solid rgba(255,255,255,.4) !important;
+  font-size: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
   touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.action-btn-item:hover {
-  background: linear-gradient(135deg, rgba(20,20,30,0.95), rgba(40,40,50,0.95));
-  border-color: rgba(255,255,255,0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+  user-select: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,.5) !important;
+  transition: all 0.1s;
+  position: relative;
+  overflow: hidden;
+  padding: 0 !important;
+  margin: 0 !important;
+  /* Upewnij się że na mobile są dokładnie takie same jak przyciski ataku */
+  min-width: 56px !important;
+  min-height: 56px !important;
+  max-width: 56px !important;
+  max-height: 56px !important;
+  line-height: 1 !important;
 }
 
 .action-btn-item:active {
-  transform: translateY(0) scale(0.95);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  transform: scale(0.9) !important;
+  background: rgba(0,0,0,.9) !important;
+  border-color: rgba(255,255,255,.7) !important;
 }
 
+/* Wyłącz normalny :active dla migającego przycisku inventory */
+.action-btn-item.low-hp-blink:active {
+  transform: scale(1.15) !important; /* Zachowaj powiększenie z animacji */
+  background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1)) !important;
+  background-color: rgba(239, 68, 68, 1) !important;
+  border-color: rgba(255, 255, 255, 1) !important;
+}
+
+/* Mobile - DOKŁADNIE takie same jak .action-btn */
+@media (max-width: 767px) {
+  .action-btn-item {
+    width: 56px !important;
+    height: 56px !important;
+    font-size: 24px !important;
+    border: 2px solid rgba(255,255,255,.4) !important;
+    border-width: 2px !important;
+    min-width: 56px !important;
+    min-height: 56px !important;
+    max-width: 56px !important;
+    max-height: 56px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+/* Desktop - DOKŁADNIE takie same jak .action-btn */
 @media (min-width: 768px) {
   .action-btn-item {
-    width: 64px;
-    height: 64px;
-    font-size: 28px;
-    border-radius: 14px;
+    width: 70px !important;
+    height: 70px !important;
+    border: 3px solid rgba(255,255,255,.4) !important;
+    border-width: 3px !important;
+    font-size: 32px !important;
+    min-width: 70px !important;
+    min-height: 70px !important;
+    max-width: 70px !important;
+    max-height: 70px !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 }
 
@@ -1108,6 +1219,111 @@ header { display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-cont
 }
 .bar-animating {
   animation: barPulse 0.5s ease-in-out;
+}
+
+/* Animacja migania dla przycisku inventory przy niskim zdrowiu - BARDZO INTENSYWNE czerwone miganie TŁA */
+@keyframes inventoryBlink {
+  0% { 
+    background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1)) !important;
+    background-color: rgba(239, 68, 68, 1) !important;
+    border-color: rgba(255, 255, 255, 1) !important;
+    border-width: 3px !important;
+    box-shadow: 0 0 40px rgba(239, 68, 68, 1), 0 0 60px rgba(239, 68, 68, 0.9), 0 0 80px rgba(239, 68, 68, 0.7), 0 4px 12px rgba(0,0,0,.5) !important;
+    transform: scale(1.2);
+  }
+  50% { 
+    background: linear-gradient(135deg, rgba(185, 28, 28, 0.3), rgba(153, 27, 27, 0.3)) !important;
+    background-color: rgba(185, 28, 28, 0.3) !important;
+    border-color: rgba(255, 150, 150, 0.9) !important;
+    border-width: 2px !important;
+    box-shadow: 0 0 20px rgba(185, 28, 28, 0.5), 0 0 30px rgba(185, 28, 28, 0.3), 0 4px 12px rgba(0,0,0,.5) !important;
+    transform: scale(1.1);
+  }
+  100% { 
+    background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1)) !important;
+    background-color: rgba(239, 68, 68, 1) !important;
+    border-color: rgba(255, 255, 255, 1) !important;
+    border-width: 3px !important;
+    box-shadow: 0 0 40px rgba(239, 68, 68, 1), 0 0 60px rgba(239, 68, 68, 0.9), 0 0 80px rgba(239, 68, 68, 0.7), 0 4px 12px rgba(0,0,0,.5) !important;
+    transform: scale(1.2);
+  }
+}
+.action-btn-item.low-hp-blink {
+  animation: inventoryBlink 0.3s ease-in-out infinite !important;
+  z-index: 300 !important; /* Wyżej niż inne przyciski */
+  position: relative !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1)) !important;
+  background-color: rgba(239, 68, 68, 1) !important;
+  border-color: rgba(255, 255, 255, 1) !important;
+  border-width: 3px !important;
+}
+
+/* Responsywne style dla ekranu skarbca */
+@media (max-width: 767px) {
+  #inventoryModal .panel {
+    padding: 20px 16px !important;
+  }
+  
+  #inventoryModal h1 {
+    font-size: 36px !important;
+  }
+  
+  #inventoryModal h2 {
+    font-size: 24px !important;
+  }
+  
+  /* HP i MP zawsze obok siebie, nawet na mobile */
+  #inventoryModal .panel > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  
+  #inventoryModal .panel > div[style*="grid-template-columns"] > div {
+    padding: 14px 10px !important;
+  }
+  
+  #inventoryModal .panel > div[style*="grid-template-columns"] > div > div[style*="font-size:42px"] {
+    font-size: 28px !important;
+  }
+  
+  #inventoryModal .panel > div[style*="grid-template-columns"] > div > div[style*="font-size:22px"] {
+    font-size: 18px !important;
+  }
+  
+  #inventoryModal .panel > div[style*="grid-template-columns"] > div > div[style*="font-size:36px"] {
+    font-size: 28px !important;
+  }
+  
+  #inventoryModal .panel button.btn {
+    padding: 16px 20px !important;
+    font-size: 18px !important;
+  }
+  
+  #inventoryModal .panel button.btn span[style*="font-size:36px"] {
+    font-size: 28px !important;
+  }
+  
+  #inventoryModal .panel > div[style*="font-size:24px"] {
+    font-size: 20px !important;
+    padding: 10px !important;
+  }
+}
+
+/* Upewnij się że animacja działa na mobile i desktop */
+@media (max-width: 767px) {
+  .action-btn-item.low-hp-blink {
+    animation: inventoryBlink 0.3s ease-in-out infinite !important;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1)) !important;
+    background-color: rgba(239, 68, 68, 1) !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .action-btn-item.low-hp-blink {
+    animation: inventoryBlink 0.3s ease-in-out infinite !important;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(220, 38, 38, 1)) !important;
+    background-color: rgba(239, 68, 68, 1) !important;
+  }
 }
 .bar > div {
   transition: width 0.4s ease-out;
