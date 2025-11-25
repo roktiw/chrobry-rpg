@@ -102,6 +102,7 @@ if(state.levelUpPoints === undefined) state.levelUpPoints = 0;
   if(state.megabeasts === undefined) state.megabeasts = [];
   if(state.nestsDestroyedByType === undefined) state.nestsDestroyedByType = [0, 0, 0, 0];
   if(state.lives === undefined) state.lives = 3;
+  if(state.respawnInvulnerable === undefined) state.respawnInvulnerable = 0;
   if(state.achievements === undefined) state.achievements = {};
   if(state.stats === undefined) {
     state.stats = {
@@ -1063,11 +1064,12 @@ function spawnChild() {
     y: state.woman.y,
     emoji: isBoy ? '👶' : '👧',
     gender: isBoy ? 'boy' : 'girl',
-    speed: 2.0,
-    reachedPlayer: false, // Has reached player for the first time
-    lastAttack: 0,
-    meleeSpin: null, // Melee spin dla dziecka (naśladuje gracza)
-    id: Math.random().toString(36).slice(2)
+      speed: 2.0,
+      reachedPlayer: false, // Has reached player for the first time
+      lastAttack: 0,
+      lastRangedAttack: 0, // Cooldown dla strzałów córki
+      meleeSpin: null, // Melee spin dla dziecka (naśladuje gracza)
+      id: Math.random().toString(36).slice(2)
   };
   state.children.push(child);
   toast(isBoy ? '👶 Urodził się syn!' : '👧 Urodziła się córka!');
@@ -1492,17 +1494,22 @@ function handleNestDestroyed(nest) {
     const destroyedCount = state.nestsDestroyedByType[nest.type];
     
     // Zawsze spawnuj normalną megabestię przy zniszczeniu legowiska
-    spawnMegabeast(nest.type, nest.x, nest.y, false);
+    spawnMegabeast(nest.type, nest.x, nest.y, false, false);
     
     // Spawnuj ultra megabestię co 3 zniszczone legowiska (3, 6, 9, 12...)
     if(destroyedCount % 3 === 0) {
-      spawnMegabeast(nest.type, nest.x, nest.y, true);
+      spawnMegabeast(nest.type, nest.x, nest.y, true, false);
+    }
+    
+    // Spawnuj HIPER ULTRA megabestię co 10 zniszczonych legowisk (10, 20, 30...)
+    if(destroyedCount % 10 === 0) {
+      spawnMegabeast(nest.type, nest.x, nest.y, true, true);
     }
   }
 }
 
 // Funkcja do spawnu megabestii
-function spawnMegabeast(enemyTypeIndex, nearX, nearY, isUltra = false) {
+function spawnMegabeast(enemyTypeIndex, nearX, nearY, isUltra = false, isHiperUltra = false) {
   const enemyDef = ENEMIES[enemyTypeIndex];
   if(!enemyDef) return;
   
@@ -1512,8 +1519,15 @@ function spawnMegabeast(enemyTypeIndex, nearX, nearY, isUltra = false) {
   const mx = (nearX + Math.cos(ang)*dist + state.world.width) % state.world.width;
   const my = (nearY + Math.sin(ang)*dist + state.world.height) % state.world.height;
   
-  // HP: normalna megabestia = 10x, ultra megabestia = 20x
-  const hpMultiplier = isUltra ? 20 : 10;
+  // HP: normalna = 10x, ultra = 20x, hiper ultra = 40x (2x więcej niż ultra)
+  let hpMultiplier;
+  if(isHiperUltra) {
+    hpMultiplier = 40; // Hiper Ultra ma 2x więcej HP niż Ultra (20x * 2 = 40x)
+  } else if(isUltra) {
+    hpMultiplier = 20; // Ultra ma 2x więcej HP niż normalna (10x * 2 = 20x)
+  } else {
+    hpMultiplier = 10; // Normalna megabestia
+  }
   const hpMax = enemyDef.hp * hpMultiplier;
   
   state.megabeasts.push({
@@ -1524,6 +1538,7 @@ function spawnMegabeast(enemyTypeIndex, nearX, nearY, isUltra = false) {
     hpMax: hpMax,
     id: Math.random().toString(36).slice(2),
     isUltra: isUltra, // Flaga ultra megabestii
+    isHiperUltra: isHiperUltra, // Flaga hiper ultra megabestii
     // Pola dla AI i ataków
     state: 'idle', // 'idle', 'chasing', 'preparing', 'attacking', 'recovering', 'special'
     attackTimer: 0,
@@ -1542,7 +1557,14 @@ function spawnMegabeast(enemyTypeIndex, nearX, nearY, isUltra = false) {
   
   const enemyNames = ['Wilk', 'Dzika świnia', 'Żmija', 'Trup'];
   const enemyName = enemyNames[enemyTypeIndex] || 'Potwór';
-  const prefix = isUltra ? '💀 ULTRA MEGA' : '⚠️ MEGA';
+  let prefix;
+  if(isHiperUltra) {
+    prefix = '🔥 HIPER ULTRA MEGA';
+  } else if(isUltra) {
+    prefix = '💀 ULTRA MEGA';
+  } else {
+    prefix = '⚠️ MEGA';
+  }
   toast(`${prefix} ${enemyDef.emoji} ${enemyName} pojawiła się!`);
 }
 
@@ -1922,61 +1944,86 @@ if(devMenuModal) {
   
   // Spawn megabestii (normalne)
   document.getElementById('devSpawnWolf').addEventListener('click', () => {
-    spawnMegabeast(0, state.pos.x + 200, state.pos.y, false);
+    spawnMegabeast(0, state.pos.x + 200, state.pos.y, false, false);
     toast('🐺 Spawniono Megawilka!');
   });
   
   document.getElementById('devSpawnBoar').addEventListener('click', () => {
-    spawnMegabeast(1, state.pos.x + 200, state.pos.y, false);
+    spawnMegabeast(1, state.pos.x + 200, state.pos.y, false, false);
     toast('🐗 Spawniono Megadzika!');
   });
   
   document.getElementById('devSpawnSnake').addEventListener('click', () => {
-    spawnMegabeast(2, state.pos.x + 200, state.pos.y, false);
+    spawnMegabeast(2, state.pos.x + 200, state.pos.y, false, false);
     toast('🐍 Spawniono Megażmiję!');
   });
   
   document.getElementById('devSpawnZombie').addEventListener('click', () => {
-    spawnMegabeast(3, state.pos.x + 200, state.pos.y, false);
+    spawnMegabeast(3, state.pos.x + 200, state.pos.y, false, false);
     toast('🧟 Spawniono Megatrupa!');
   });
   
   // Spawn ultra megabestii
   document.getElementById('devSpawnUltraWolf').addEventListener('click', () => {
-    spawnMegabeast(0, state.pos.x + 200, state.pos.y, true);
+    spawnMegabeast(0, state.pos.x + 200, state.pos.y, true, false);
     toast('💀 Spawniono Ultra Megawilka!');
   });
   
   document.getElementById('devSpawnUltraBoar').addEventListener('click', () => {
-    spawnMegabeast(1, state.pos.x + 200, state.pos.y, true);
+    spawnMegabeast(1, state.pos.x + 200, state.pos.y, true, false);
     toast('💀 Spawniono Ultra Megadzika!');
   });
   
   document.getElementById('devSpawnUltraSnake').addEventListener('click', () => {
-    spawnMegabeast(2, state.pos.x + 200, state.pos.y, true);
+    spawnMegabeast(2, state.pos.x + 200, state.pos.y, true, false);
     toast('💀 Spawniono Ultra Megażmiję!');
   });
   
   document.getElementById('devSpawnUltraZombie').addEventListener('click', () => {
-    spawnMegabeast(3, state.pos.x + 200, state.pos.y, true);
+    spawnMegabeast(3, state.pos.x + 200, state.pos.y, true, false);
     toast('💀 Spawniono Ultra Megatrupa!');
+  });
+  
+  // Spawn hiper ultra megabestii
+  document.getElementById('devSpawnHiperUltraWolf').addEventListener('click', () => {
+    spawnMegabeast(0, state.pos.x + 200, state.pos.y, true, true);
+    toast('🔥 Spawniono HIPER ULTRA Megawilka!');
+  });
+  
+  document.getElementById('devSpawnHiperUltraBoar').addEventListener('click', () => {
+    spawnMegabeast(1, state.pos.x + 200, state.pos.y, true, true);
+    toast('🔥 Spawniono HIPER ULTRA Megadzika!');
+  });
+  
+  document.getElementById('devSpawnHiperUltraSnake').addEventListener('click', () => {
+    spawnMegabeast(2, state.pos.x + 200, state.pos.y, true, true);
+    toast('🔥 Spawniono HIPER ULTRA Megażmiję!');
+  });
+  
+  document.getElementById('devSpawnHiperUltraZombie').addEventListener('click', () => {
+    spawnMegabeast(3, state.pos.x + 200, state.pos.y, true, true);
+    toast('🔥 Spawniono HIPER ULTRA Megatrupa!');
   });
   
   // Spawn inne
   document.getElementById('devSpawnChild').addEventListener('click', () => {
     const ang = Math.random() * Math.PI * 2;
     const dist = 100;
+    const isBoy = Math.random() < 0.5; // 50% chance
     state.children.push({
       x: state.pos.x + Math.cos(ang) * dist,
       y: state.pos.y + Math.sin(ang) * dist,
-      id: Math.random().toString(36).slice(2),
-      t: 0,
-      meleeSpin: null,
-      speed: 1.5,
+      emoji: isBoy ? '👶' : '👧',
+      gender: isBoy ? 'boy' : 'girl',
+      speed: 2.0,
       reachedPlayer: false,
-      lastAttack: 0
+      lastAttack: 0,
+      lastRangedAttack: 0, // Cooldown dla strzałów córki
+      meleeSpin: null,
+      id: Math.random().toString(36).slice(2),
+      t: 0
     });
-    toast('👶 Spawniono dziecko!');
+    toast(isBoy ? '👶 Spawniono syna!' : '👧 Spawniono córkę!');
   });
   
   document.getElementById('devSpawnNest').addEventListener('click', () => {
@@ -2346,7 +2393,7 @@ function step(dt){
               spawnPickup('meat', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
             }
             for(let i = 0; i < 5; i++) {
-              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(50, 100), undefined);
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 75, undefined); // Uproszczone: zawsze 75 XP
             }
           }
           else if(mb.type === 1) { // 🐗 DZIK
@@ -2370,7 +2417,7 @@ function step(dt){
               spawnPickup('mead', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
             }
             for(let i = 0; i < 10; i++) {
-              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(30, 60), undefined);
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 50, undefined); // Uproszczone: zawsze 50 XP
             }
           }
           else if(mb.type === 3) { // 🧟 TRUP
@@ -2384,7 +2431,7 @@ function step(dt){
               spawnPickup(dropType, mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
             }
             for(let i = 0; i < 15; i++) {
-              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(40, 80), undefined);
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 60, undefined); // Uproszczone: zawsze 60 XP
             }
           }
           
@@ -2492,8 +2539,18 @@ function step(dt){
   }
   
   // Update pickup physics (bouncing animation)
+  // WAŻNE: wyłącz bouncing jeśli przedmiot jest w zasięgu przyciągania (magnetRange)
+  const magnetRange = state.level + state.pickupMagnetRange;
+  
   for(const p of state.pickups) {
-    if(p.bouncing) {
+    // Sprawdź czy przedmiot jest w zasięgu przyciągania
+    let dx = p.x - state.pos.x, dy = p.y - state.pos.y;
+    if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+    if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+    const dist = Math.hypot(dx, dy);
+    const isInMagnetRange = magnetRange > 0 && dist <= magnetRange;
+    
+    if(p.bouncing && !isInMagnetRange) {
       // Gravity
       p.vy += 0.15 * (dt / 16); // Gravity acceleration
       
@@ -2529,6 +2586,12 @@ function step(dt){
           if(p.groundY) p.y = p.groundY; // Snap to ground
         }
       }
+    } else if(p.bouncing && isInMagnetRange) {
+      // Jeśli przedmiot jest w zasięgu przyciągania, natychmiast wyłącz bouncing
+      p.bouncing = false;
+      p.vx = 0;
+      p.vy = 0;
+      if(p.groundY) p.y = p.groundY; // Snap to ground
     }
   }
 
@@ -2775,6 +2838,14 @@ function step(dt){
     }
   }
   
+  // Update respawn invulnerability (spawn kill protection)
+  if(state.respawnInvulnerable > 0) {
+    state.respawnInvulnerable -= dt;
+    if(state.respawnInvulnerable <= 0) {
+      state.respawnInvulnerable = 0;
+    }
+  }
+  
   // Update megabeasts AI and attacks
   for(const mb of state.megabeasts) {
     mb.t += dt;
@@ -2792,8 +2863,39 @@ function step(dt){
     if(mb.attackCooldown > 0) mb.attackCooldown -= dt;
     if(mb.projectileCooldown > 0) mb.projectileCooldown -= dt;
     
-    // Ultra megabestia ma mocniejsze ataki (1.5x obrażenia)
-    const damageMultiplier = mb.isUltra ? 1.5 : 1.0;
+    // Ultra megabestia ma mocniejsze ataki (1.5x obrażenia), Hiper Ultra ma 2x obrażenia
+    const damageMultiplier = mb.isHiperUltra ? 2.0 : (mb.isUltra ? 1.5 : 1.0);
+    
+    // === HIPER ULTRA MEGABESTIE - DODATKOWE PROJECTILE ATTACKS ===
+    if(mb.isHiperUltra && mb.type !== 3) { // Wszystkie oprócz trupa strzelają projectile
+      // Hiper Ultra strzelają projectile częściej i więcej
+      if(mb.projectileCooldown <= 0 && dist < 500) {
+        mb.projectileCooldown = 2000; // Co 2 sekundy (szybciej niż normalne)
+        const projectileCount = mb.type === 2 ? 12 : 6; // Żmija więcej projectile
+        
+        for(let i = 0; i < projectileCount; i++) {
+          const angle = Math.atan2(dy, dx) + (i - projectileCount/2) * (Math.PI * 2 / projectileCount);
+          const vx = Math.cos(angle) * 6;
+          const vy = Math.sin(angle) * 6;
+          const arrowTrail = [];
+          for(let j = 0; j < 8; j++) {
+            arrowTrail.push({ x: mb.x, y: mb.y });
+          }
+          state.projectiles.push({
+            x: mb.x,
+            y: mb.y,
+            vx: vx,
+            vy: vy,
+            dmg: Math.floor(enemyDef.atk * 1.5 * damageMultiplier),
+            ttl: 3000,
+            emoji: mb.type === 2 ? '💚' : '🦴',
+            trail: arrowTrail,
+            rotation: angle,
+            isPoison: mb.type === 2
+          });
+        }
+      }
+    }
     
     // === PRZEPROJEKTOWANE MEGABESTIE - UNIKALNE WZORCE ATAKU ===
     if(mb.type === 0) { // 🐺 MEGAWILK - Pattern: Dash Attack + Triple Bone Throw
@@ -2859,8 +2961,8 @@ function step(dt){
           mb.y += mb.chargeDirection.y * mb.chargeSpeed * (dt/16);
           mb.attackTimer -= dt;
           
-          // Kolizja z graczem
-          if(dist < 35) {
+          // Kolizja z graczem (tylko jeśli gracz nie ma respawn protection)
+          if(dist < 35 && state.respawnInvulnerable <= 0) {
             const damage = Math.floor(enemyDef.atk * 2 * damageMultiplier);
             state.hp -= damage;
             floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 24, 1200);
@@ -2954,8 +3056,8 @@ function step(dt){
           mb.y += mb.chargeDirection.y * mb.chargeSpeed * (dt/16);
           mb.attackTimer -= dt;
           
-          // Kolizja z graczem
-          if(dist < 40) {
+          // Kolizja z graczem (tylko jeśli gracz nie ma respawn protection)
+          if(dist < 40 && state.respawnInvulnerable <= 0) {
             const damage = Math.floor(enemyDef.atk * 3 * damageMultiplier);
             state.hp -= damage;
             floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 28, 1200);
@@ -3007,8 +3109,8 @@ function step(dt){
             mb.teleportTimer = 6000;
           }
           
-          // Pattern 2: Quick Bite (co 2.5 sekundy, gdy blisko)
-          if(mb.attackCooldown <= 0 && dist < 50) {
+          // Pattern 2: Quick Bite (co 2.5 sekundy, gdy blisko) - tylko jeśli gracz nie ma respawn protection
+          if(mb.attackCooldown <= 0 && dist < 50 && state.respawnInvulnerable <= 0) {
             mb.attackCooldown = 2500;
             const damage = Math.floor(enemyDef.atk * 1.5 * damageMultiplier);
             state.hp -= damage;
@@ -3157,19 +3259,21 @@ function step(dt){
           
           if(mb.warningTimer <= 0) {
             mb.state = 'attacking';
-            // Heavy slam - mocny atak wręcz
-            const damage = Math.floor(enemyDef.atk * 3 * damageMultiplier);
-            state.hp -= damage;
-            floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 32, 1200);
-            addScreenShake(6, 300);
-            spawnParticles(state.pos.x, state.pos.y, 20, '#ff0000', 'spark');
-            animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-damage)/state.hpMax)*100);
-            
-            // Mocny knockback
-            const knockback = 80;
-            const knockDir = {x: dx/dist, y: dy/dist};
-            state.pos.x -= knockDir.x * knockback;
-            state.pos.y -= knockDir.y * knockback;
+            // Heavy slam - mocny atak wręcz (tylko jeśli gracz nie ma respawn protection)
+            if(state.respawnInvulnerable <= 0) {
+              const damage = Math.floor(enemyDef.atk * 3 * damageMultiplier);
+              state.hp -= damage;
+              floatingText(`-${damage}`, state.pos.x, state.pos.y, '#ff0000', 32, 1200);
+              addScreenShake(6, 300);
+              spawnParticles(state.pos.x, state.pos.y, 20, '#ff0000', 'spark');
+              animateBar('hp', (state.hp/state.hpMax)*100, ((state.hp-damage)/state.hpMax)*100);
+              
+              // Mocny knockback
+              const knockback = 80;
+              const knockDir = {x: dx/dist, y: dy/dist};
+              state.pos.x -= knockDir.x * knockback;
+              state.pos.y -= knockDir.y * knockback;
+            }
             
             mb.state = 'recovering';
             mb.attackCooldown = 2000;
@@ -3189,6 +3293,65 @@ function step(dt){
     const mbWrapped = wrapPos(mb.x, mb.y, state.world.width, state.world.height);
     mb.x = mbWrapped.x;
     mb.y = mbWrapped.y;
+    
+    // === Kolizja i podstawowy atak wręcz megabestii ===
+    // Oblicz odległość do gracza (już obliczona wcześniej w pętli, ale użyjemy ponownie)
+    let mbDx = state.pos.x - mb.x, mbDy = state.pos.y - mb.y;
+    if(Math.abs(mbDx) > state.world.width / 2) mbDx = mbDx > 0 ? mbDx - state.world.width : mbDx + state.world.width;
+    if(Math.abs(mbDy) > state.world.height / 2) mbDy = mbDy > 0 ? mbDy - state.world.height : mbDy + state.world.height;
+    const mbDist = Math.hypot(mbDx, mbDy);
+    const mbMinD = COLLIDE.playerR + COLLIDE.enemyR * 2; // Megabestie są większe, więc większy promień kolizji
+    
+    // Collision push (tylko gdy nie jest w stanie specjalnego ataku)
+    if(mb.state !== 'attacking' && mb.state !== 'preparing' && mbDist > 0 && mbDist < mbMinD) {
+      const mbNx = mbDx/mbDist, mbNy = mbDy/mbDist;
+      const mbPush = (mbMinD - mbDist) + 0.01;
+      mb.x += mbNx * mbPush;
+      mb.y += mbNy * mbPush;
+      const mbWrapped2 = wrapPos(mb.x, mb.y, state.world.width, state.world.height);
+      mb.x = mbWrapped2.x;
+      mb.y = mbWrapped2.y;
+      
+      // Knockback animation for player on collision
+      if(state.knockback.t <= 0) {
+        state.knockback.x = -mbNx * 8; // Silniejszy knockback od megabestii
+        state.knockback.y = -mbNy * 8;
+        state.knockback.t = 200; // Dłuższy knockback
+      }
+    }
+    
+    // Podstawowy atak wręcz (tylko gdy nie jest w stanie specjalnego ataku i jest blisko)
+    const mbAttackRange = COLLIDE.playerR + COLLIDE.enemyR * 2 + 10; // Większy zasięg ataku
+    const mbLastHitTime = state.lastHitTime || 0;
+    const mbRespawnInvulnerable = (state.respawnInvulnerable || 0);
+    const mbEnemyDef = ENEMIES[mb.type]; // Pobierz definicję wroga
+    const mbCurrentTime = Date.now(); // Czas dla cooldownów
+    if(mbEnemyDef && mb.state !== 'attacking' && mb.state !== 'preparing' && mb.state !== 'recovering' && 
+       mbDist <= mbAttackRange && mbCurrentTime - mbLastHitTime > 1000 && mbRespawnInvulnerable <= 0) {
+      // Megabestie zadają więcej obrażeń niż normalne wrogi
+      const mbDamageMultiplier = mb.isHiperUltra ? 2.0 : (mb.isUltra ? 1.5 : 1.0);
+      const mbDamage = Math.floor((mbEnemyDef.atk || 10) * 1.5 * mbDamageMultiplier);
+      const oldHP = state.hp;
+      state.hp = clamp(state.hp - mbDamage, 0, state.hpMax);
+      
+      // Reakcja na utratę zdrowia
+      if(state.hp < oldHP) {
+        triggerPlayerReaction('takeDamage');
+        addScreenShake(10, 200); // Silniejszy screen shake od megabestii
+        spawnParticles(state.pos.x, state.pos.y, 12, '#ff0000', 'damage');
+      }
+      
+      animateBar('hp', (oldHP/state.hpMax)*100, (state.hp/state.hpMax)*100);
+      floatingText(`-${mbDamage}`, state.pos.x, state.pos.y, '#ff0000', 28, 1200);
+      state.lastHitTime = mbCurrentTime;
+      
+      // Mocny knockback
+      const mbNx = (mbDist > 0 ? mbDx/mbDist : 0), mbNy = (mbDist > 0 ? mbDy/mbDist : 0);
+      state.knockback.x = -mbNx * 20; // Bardzo silny knockback
+      state.knockback.y = -mbNy * 20;
+      state.knockback.t = 400; // Dłuższy knockback
+      updateHUD();
+    }
   }
   
   // Wrap-around for enemies
@@ -3262,8 +3425,10 @@ function step(dt){
     state.lastReactionCheck.wizard = now;
   }
   
-  // Children AI - follow player and attack enemies
+  // Czas dla cooldownów (używany w kolizjach i atakach)
   const currentTime = Date.now();
+  
+  // Children AI - follow player and attack enemies
   for(const child of state.children) {
     // Calculate distance to player
     let dx = state.pos.x - child.x, dy = state.pos.y - child.y;
@@ -3339,7 +3504,7 @@ function step(dt){
       }
       
       // Atak dziecka - gdy gracz uderza mieczem, wszystkie dzieci też uderzają mieczem
-      if(nearestEnemy) { // Bez cooldownu
+      if(nearestEnemy) {
         // Jeśli gracz uderza mieczem, wszystkie dzieci też uderzają mieczem
         if(state.meleeSpin && !child.meleeSpin) {
           const startAngle = rand(0, Math.PI * 2);
@@ -3347,35 +3512,43 @@ function step(dt){
         } else if(!state.meleeSpin && !child.meleeSpin) {
           // Gdy gracz nie atakuje melee, dzieci używają swoich domyślnych ataków
           if(child.gender === 'boy') {
-            // Syn (👶) - używa miecza
-            const startAngle = rand(0, Math.PI * 2);
-            child.meleeSpin = { t: 0, dur: 450, hit: new Set(), startAngle };
-          } else if(child.gender === 'girl') {
-            // Córka (👧) - strzela z łuku
-            let edx = nearestEnemy.x - child.x, edy = nearestEnemy.y - child.y;
-            if(Math.abs(edx) > state.world.width / 2) edx = edx > 0 ? edx - state.world.width : edx + state.world.width;
-            if(Math.abs(edy) > state.world.height / 2) edy = edy > 0 ? edy - state.world.height : edy + state.world.height;
-            const len = Math.hypot(edx, edy) || 1;
-            const vx = (edx / len) * 5.0; // Nieco wolniejsza niż gracz
-            const vy = (edy / len) * 5.0;
-            // Dodaj trail history dla animacji strzały dziecka
-            const childArrowTrail = [];
-            for(let j = 0; j < 5; j++) {
-              childArrowTrail.push({ x: child.x, y: child.y });
+            // Syn (👶) - używa miecza (z cooldownem)
+            const currentTime = Date.now();
+            if(currentTime - child.lastAttack > 800) { // 800ms cooldown dla syna
+              const startAngle = rand(0, Math.PI * 2);
+              child.meleeSpin = { t: 0, dur: 450, hit: new Set(), startAngle };
+              child.lastAttack = currentTime;
             }
-            
-            state.projectiles.push({ 
-              x: child.x, 
-              y: child.y, 
-              vx, 
-              vy, 
-              ttl: 6000, 
-              dmg: state.level, 
-              emoji: '🏹',
-              fromChild: true, // Oznacz że to od dziecka
-              trail: childArrowTrail, // Historia pozycji dla trail effect
-              rotation: Math.atan2(vy, vx) // Kąt rotacji strzały
-            });
+          } else if(child.gender === 'girl') {
+            // Córka (👧) - strzela z łuku (z cooldownem)
+            const currentTime = Date.now();
+            if(currentTime - (child.lastRangedAttack || 0) > 1000) { // 1 sekunda cooldown dla córki
+              let edx = nearestEnemy.x - child.x, edy = nearestEnemy.y - child.y;
+              if(Math.abs(edx) > state.world.width / 2) edx = edx > 0 ? edx - state.world.width : edx + state.world.width;
+              if(Math.abs(edy) > state.world.height / 2) edy = edy > 0 ? edy - state.world.height : edy + state.world.height;
+              const len = Math.hypot(edx, edy) || 1;
+              const vx = (edx / len) * 5.0; // Nieco wolniejsza niż gracz
+              const vy = (edy / len) * 5.0;
+              // Dodaj trail history dla animacji strzały dziecka
+              const childArrowTrail = [];
+              for(let j = 0; j < 5; j++) {
+                childArrowTrail.push({ x: child.x, y: child.y });
+              }
+              
+              state.projectiles.push({ 
+                x: child.x, 
+                y: child.y, 
+                vx, 
+                vy, 
+                ttl: 6000, 
+                dmg: state.level, 
+                emoji: '🏹',
+                fromChild: true, // Oznacz że to od dziecka
+                trail: childArrowTrail, // Historia pozycji dla trail effect
+                rotation: Math.atan2(vy, vx) // Kąt rotacji strzały
+              });
+              child.lastRangedAttack = currentTime; // Zaktualizuj cooldown
+            }
           }
         }
       }
@@ -3411,11 +3584,14 @@ function step(dt){
       }
     }
     
-    // Attack hitbox - enemy can attack when close enough
+    // Attack hitbox - enemy can attack when close enough (tylko jeśli gracz nie ma respawn protection)
     const attackRange = COLLIDE.playerR + COLLIDE.enemyR + 8; // Slightly larger than collision
-    if(d <= attackRange && currentTime - state.lastHitTime > 800) { // 800ms cooldown between hits
+    const lastHitTime = state.lastHitTime || 0; // Fallback jeśli nie jest zdefiniowane
+    const respawnInvulnerable = (state.respawnInvulnerable || 0); // Fallback jeśli nie jest zdefiniowane
+    if(d <= attackRange && currentTime - lastHitTime > 800 && respawnInvulnerable <= 0) { // 800ms cooldown between hits
+      const enemyAtk = e.atk || 5; // Fallback jeśli atk nie jest zdefiniowane
       const oldHP = state.hp;
-      state.hp = clamp(state.hp - e.atk, 0, state.hpMax);
+      state.hp = clamp(state.hp - enemyAtk, 0, state.hpMax);
       
       // Reakcja na utratę zdrowia (tylko jeśli HP faktycznie spadło)
       if(state.hp < oldHP) {
@@ -3427,7 +3603,7 @@ function step(dt){
       }
       
       animateBar('hp', (oldHP/state.hpMax)*100, (state.hp/state.hpMax)*100);
-      floatingText(`-${e.atk}`, state.pos.x, state.pos.y, '#ff6a6a', 22, 1200);
+      floatingText(`-${enemyAtk}`, state.pos.x, state.pos.y, '#ff6a6a', 22, 1200);
       state.lastHitTime = currentTime;
       
       // Knockback on hit
@@ -3468,6 +3644,41 @@ function step(dt){
       }
     }
   }
+  
+  // enemies vs megabeasts (normal enemies can attack megabeasts, but ultra/hiper ultra are immune)
+  for(const e of state.enemies) {
+    for(const mb of state.megabeasts) {
+      // Ultra i Hiper Ultra megabestie są odporne na ataki normalnych wrogów
+      if(mb.isUltra || mb.isHiperUltra) continue;
+      
+      let dx = mb.x - e.x, dy = mb.y - e.y;
+      if(Math.abs(dx) > state.world.width / 2) dx = dx > 0 ? dx - state.world.width : dx + state.world.width;
+      if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
+      const d = Math.hypot(dx, dy);
+      const attackRange = COLLIDE.enemyR * 2 + 10; // Range dla ataku wroga na megabestię
+      
+      // Normalny wróg może atakować megabestię (tylko jeśli nie jest ultra/hiper ultra)
+      if(d <= attackRange && currentTime - (e.lastHitTime || 0) > 1000) {
+        const enemyAtk = e.atk || 5;
+        mb.hp -= enemyAtk;
+        floatingText(`-${enemyAtk}`, mb.x, mb.y, '#ff6a6a', 18, 800);
+        e.lastHitTime = currentTime;
+        
+        if(mb.hp <= 0) {
+          // Megabestia zginęła
+          const idx = state.megabeasts.findIndex(x => x === mb);
+          if(idx >= 0) state.megabeasts.splice(idx, 1);
+          // Drop loot dla megabestii
+          const mbEnemyDef = ENEMIES[mb.type];
+          if(mbEnemyDef) {
+            spawnPickup('gold', mb.x, mb.y, 30);
+            const xpValue = mb.isHiperUltra ? 200 : (mb.isUltra ? 100 : 50);
+            spawnPickup('xp', mb.x, mb.y, xpValue);
+          }
+        }
+      }
+    }
+  }
 
   for(let i=state.projectiles.length-1;i>=0;i--){
     const pr = state.projectiles[i]; 
@@ -3497,8 +3708,8 @@ function step(dt){
       if(Math.abs(dy) > state.world.height / 2) dy = dy > 0 ? dy - state.world.height : dy + state.world.height;
       const dist = Math.hypot(dx, dy);
       
-      if(dist < 25) {
-        // Trafienie gracza
+      if(dist < 25 && state.respawnInvulnerable <= 0) {
+        // Trafienie gracza (tylko jeśli gracz nie ma respawn protection)
         state.hp -= pr.dmg;
         floatingText(`-${pr.dmg}`, state.pos.x, state.pos.y, '#ff0000', 24, 1200);
         addScreenShake(2, 150);
@@ -3588,7 +3799,7 @@ function step(dt){
               spawnPickup('meat', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
             }
             for(let i = 0; i < 5; i++) {
-              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(50, 100), undefined);
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 75, undefined); // Uproszczone: zawsze 75 XP
             }
           }
           else if(mb.type === 1) { // 🐗 DZIK
@@ -3612,7 +3823,7 @@ function step(dt){
               spawnPickup('mead', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
             }
             for(let i = 0; i < 10; i++) {
-              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(30, 60), undefined);
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 50, undefined); // Uproszczone: zawsze 50 XP
             }
           }
           else if(mb.type === 3) { // 🧟 TRUP
@@ -3626,7 +3837,7 @@ function step(dt){
               spawnPickup(dropType, mb.x + rand(-30, 30), mb.y + rand(-30, 30), 1, undefined);
             }
             for(let i = 0; i < 15; i++) {
-              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), rand(40, 80), undefined);
+              spawnPickup('xp', mb.x + rand(-30, 30), mb.y + rand(-30, 30), 60, undefined); // Uproszczone: zawsze 60 XP
             }
           }
           
@@ -3829,7 +4040,7 @@ function step(dt){
       toast(`💀 Zginąłeś! Pozostało żyć: ${state.lives}`);
       state.paused = true;
       showStartScreen(); // Pokaż ekran startowy po śmierci
-      // Reset pozycji i wrogów, ale zachowaj stan świata
+      // Reset pozycji i wrogów, ale zachowaj stan świata (w tym megabestie!)
       state.hp = state.hpMax;
       state.mp = state.mpMax;
       state.pos = {x:3000, y:3000};
@@ -3837,6 +4048,10 @@ function step(dt){
       state.pickups = [];
       state.projectiles = [];
       state.children = [];
+      // Megabestie NIE są resetowane - pozostają w grze!
+      // Dodaj spawn kill protection - gracz jest niewrażliwy przez 3 sekundy po respawnie
+      if(state.respawnInvulnerable === undefined) state.respawnInvulnerable = 0;
+      state.respawnInvulnerable = 3000; // 3 sekundy ochrony
       // Nie resetuj jaskini i drzew - zachowaj stan świata
     } else {
       // Game Over - pokaż ekran startowy
@@ -3854,6 +4069,7 @@ function step(dt){
       state.nests = [];
       state.nestRespawns = [];
       state.trees = [];
+      state.megabeasts = []; // Reset megabestii tylko przy Game Over
       state.lives = 3;
       state.level = 1;
       state.xp = 0;
@@ -3936,12 +4152,16 @@ function draw(){
       const enemyDef = ENEMIES[mb.type];
       const mbEmoji = enemyDef ? enemyDef.emoji : '👹';
       
-      // Ultra megabestia jest większa
-      if(mb.isUltra) {
-        ctx.font='80px "Apple Color Emoji", "Segoe UI Emoji"';
+      // Hiper Ultra = 2x większe niż Ultra (180px), Ultra = 1.5x większe niż normalna (90px), normalna = 60px
+      let fontSize;
+      if(mb.isHiperUltra) {
+        fontSize = 180; // 2x większe niż Ultra (90px * 2 = 180px)
+      } else if(mb.isUltra) {
+        fontSize = 90; // 1.5x większa niż normalna (60px * 1.5 = 90px)
       } else {
-        ctx.font='60px "Apple Color Emoji", "Segoe UI Emoji"';
+        fontSize = 60; // Normalna megabestia
       }
+      ctx.font=`${fontSize}px "Apple Color Emoji", "Segoe UI Emoji"`;
       
       // Hit flash effect
       const isFlashing = enemyHitFlashes[mb.id] && enemyHitFlashes[mb.id] > 0;
@@ -3951,7 +4171,22 @@ function draw(){
         ctx.globalAlpha = 0.9;
         ctx.shadowBlur = 30;
         ctx.shadowColor = '#ffffff';
-        ctx.fillText(mbEmoji, s.x, s.y);
+        // Hiper Ultra: 2 emoji (lustrzane odbicie) dla wilka, dzika i żmii - stykają się tyłami głów
+        if(mb.isHiperUltra && mb.type !== 3) {
+          ctx.fillText(mbEmoji, s.x - fontSize * 0.6, s.y); // Lewe emoji (patrzy w lewo)
+          // Prawe emoji - odbite lustrzanie (patrzy w prawo) - większy offset aby tyły głów się stykały
+          ctx.save();
+          ctx.translate(s.x + fontSize * 0.6, s.y);
+          ctx.scale(-1, 1); // Odbicie poziome
+          ctx.fillText(mbEmoji, 0, 0);
+          ctx.restore();
+        } else if(mb.isHiperUltra && mb.type === 3) {
+          // Trup - poziomo jak królowa z kart (oba patrzą w lewo)
+          ctx.fillText(mbEmoji, s.x - fontSize * 0.3, s.y); // Lewe emoji
+          ctx.fillText(mbEmoji, s.x + fontSize * 0.3, s.y); // Prawe emoji
+        } else {
+          ctx.fillText(mbEmoji, s.x, s.y);
+        }
         ctx.restore();
       } else if(mb.state === 'preparing' && mb.warningTimer > 0) {
         // Sygnał ostrzegawczy (FAIR MECHANICS) - pulsujący glow podczas przygotowania
@@ -3964,12 +4199,31 @@ function draw(){
         ctx.globalAlpha = pulse * 0.7;
         ctx.shadowBlur = 35 + Math.sin(Date.now() / 80) * 15;
         ctx.shadowColor = glowColor;
-        ctx.fillText(mbEmoji, s.x, s.y);
+        // Hiper Ultra: 2 emoji (lustrzane odbicie) dla wilka, dzika i żmii - stykają się tyłami głów
+        if(mb.isHiperUltra && mb.type !== 3) {
+          ctx.fillText(mbEmoji, s.x - fontSize * 0.6, s.y); // Lewe emoji (patrzy w lewo)
+          // Prawe emoji - odbite lustrzanie (patrzy w prawo) - większy offset aby tyły głów się stykały
+          ctx.save();
+          ctx.translate(s.x + fontSize * 0.6, s.y);
+          ctx.scale(-1, 1); // Odbicie poziome
+          ctx.fillText(mbEmoji, 0, 0);
+          ctx.restore();
+        } else if(mb.isHiperUltra && mb.type === 3) {
+          // Trup - poziomo jak królowa z kart (oba patrzą w lewo)
+          ctx.fillText(mbEmoji, s.x - fontSize * 0.3, s.y); // Lewe emoji
+          ctx.fillText(mbEmoji, s.x + fontSize * 0.3, s.y); // Prawe emoji
+        } else {
+          ctx.fillText(mbEmoji, s.x, s.y);
+        }
         ctx.restore();
       } else {
         // Normalny efekt świecenia dla megabestii
         ctx.save();
-        if(mb.isUltra) {
+        if(mb.isHiperUltra) {
+          // Hiper Ultra megabestia - największy, najbardziej intensywny glow (czerwony/pomarańczowy)
+          ctx.shadowBlur = 50;
+          ctx.shadowColor = '#ff0000'; // Czerwony glow dla hiper ultra
+        } else if(mb.isUltra) {
           // Ultra megabestia - większy, bardziej intensywny glow (pomarańczowy/purpurowy)
           ctx.shadowBlur = 35;
           ctx.shadowColor = '#ff6b00'; // Pomarańczowy glow dla ultra
@@ -3979,23 +4233,40 @@ function draw(){
           ctx.shadowBlur = 20;
           ctx.shadowColor = '#ef4444';
         }
-        ctx.fillText(mbEmoji, s.x, s.y);
+        // Hiper Ultra: 2 emoji (lustrzane odbicie) dla wilka, dzika i żmii - stykają się tyłami głów
+        if(mb.isHiperUltra && mb.type !== 3) {
+          ctx.fillText(mbEmoji, s.x - fontSize * 0.6, s.y); // Lewe emoji (patrzy w lewo)
+          // Prawe emoji - odbite lustrzanie (patrzy w prawo) - większy offset aby tyły głów się stykały
+          ctx.save();
+          ctx.translate(s.x + fontSize * 0.6, s.y);
+          ctx.scale(-1, 1); // Odbicie poziome
+          ctx.fillText(mbEmoji, 0, 0);
+          ctx.restore();
+        } else if(mb.isHiperUltra && mb.type === 3) {
+          // Trup - poziomo jak królowa z kart (oba patrzą w lewo)
+          ctx.fillText(mbEmoji, s.x - fontSize * 0.3, s.y); // Lewe emoji
+          ctx.fillText(mbEmoji, s.x + fontSize * 0.3, s.y); // Prawe emoji
+        } else {
+          ctx.fillText(mbEmoji, s.x, s.y);
+        }
         ctx.restore();
       }
       
-      // Show HP bar (zawsze widoczny, większy dla ultra)
+      // Show HP bar (zawsze widoczny, większy dla ultra/hiper ultra)
       const hpPercent = mb.hp / mb.hpMax;
-      const barWidth = mb.isUltra ? 90 : 70; // Ultra ma szerszy pasek
-      const barHeight = mb.isUltra ? 10 : 8; // Ultra ma wyższy pasek
+      const barWidth = mb.isHiperUltra ? 120 : (mb.isUltra ? 90 : 70); // Hiper Ultra ma najszerszy pasek
+      const barHeight = mb.isHiperUltra ? 12 : (mb.isUltra ? 10 : 8); // Hiper Ultra ma najwyższy pasek
       ctx.fillStyle = 'rgba(0,0,0,0.7)';
-      ctx.fillRect(s.x - barWidth/2, s.y - 60, barWidth, barHeight);
-      // Ultra ma pomarańczowy pasek, normalna ma standardowy
-      if(mb.isUltra) {
+      ctx.fillRect(s.x - barWidth/2, s.y - (mb.isHiperUltra ? 90 : 60), barWidth, barHeight);
+      // Hiper Ultra ma czerwony pasek, Ultra ma pomarańczowy, normalna ma standardowy
+      if(mb.isHiperUltra) {
+        ctx.fillStyle = hpPercent > 0.5 ? '#ff0000' : hpPercent > 0.25 ? '#ff3333' : '#cc0000';
+      } else if(mb.isUltra) {
         ctx.fillStyle = hpPercent > 0.5 ? '#ff6b00' : hpPercent > 0.25 ? '#ff9500' : '#ff0000';
       } else {
         ctx.fillStyle = hpPercent > 0.5 ? '#4ade80' : hpPercent > 0.25 ? '#fbbf24' : '#ef4444';
       }
-      ctx.fillRect(s.x - barWidth/2, s.y - 60, barWidth * hpPercent, barHeight);
+      ctx.fillRect(s.x - barWidth/2, s.y - (mb.isHiperUltra ? 90 : 60), barWidth * hpPercent, barHeight);
       ctx.fillStyle = '#e6e6e6';
       
       // Przywróć domyślny font
@@ -4535,12 +4806,31 @@ function drawMiniMap() {
     const mbPos = worldToMinimap(mb.x, mb.y);
     const enemyDef = ENEMIES[mb.type];
     if(enemyDef) {
-      if(mb.isUltra) {
-        // Ultra megabestia - większa, pomarańczowa
-        minimapCtx.font = '18px "Apple Color Emoji", "Segoe UI Emoji"';
+      if(mb.isHiperUltra) {
+        // Hiper Ultra megabestia - 2x większa niż Ultra na minimapie (21px * 2 = 42px), czerwona
+        minimapCtx.font = '42px "Apple Color Emoji", "Segoe UI Emoji"';
+        minimapCtx.shadowBlur = 10;
+        minimapCtx.shadowColor = '#ff0000';
+        // Hiper Ultra: 2 emoji (lustrzane odbicie) dla wilka, dzika i żmii - stykają się tyłami głów
+        if(mb.type !== 3) {
+          minimapCtx.fillText(enemyDef.emoji, mbPos.x - 35, mbPos.y + 20); // Lewe emoji (patrzy w lewo)
+          // Prawe emoji - odbite lustrzanie (patrzy w prawo) - większy offset aby tyły głów się stykały
+          minimapCtx.save();
+          minimapCtx.translate(mbPos.x + 35, mbPos.y + 20);
+          minimapCtx.scale(-1, 1); // Odbicie poziome
+          minimapCtx.fillText(enemyDef.emoji, 0, 0);
+          minimapCtx.restore();
+        } else {
+          // Trup - poziomo jak królowa z kart (oba patrzą w lewo)
+          minimapCtx.fillText(enemyDef.emoji, mbPos.x - 20, mbPos.y + 20); // Lewe emoji
+          minimapCtx.fillText(enemyDef.emoji, mbPos.x + 20, mbPos.y + 20); // Prawe emoji
+        }
+      } else if(mb.isUltra) {
+        // Ultra megabestia - 1.5x większa na minimapie (14px * 1.5 = 21px), pomarańczowa
+        minimapCtx.font = '21px "Apple Color Emoji", "Segoe UI Emoji"';
         minimapCtx.shadowBlur = 6;
         minimapCtx.shadowColor = '#ff6b00';
-        minimapCtx.fillText(enemyDef.emoji, mbPos.x - 9, mbPos.y + 9);
+        minimapCtx.fillText(enemyDef.emoji, mbPos.x - 10, mbPos.y + 10);
       } else {
         // Normalna megabestia - czerwona
         minimapCtx.font = '14px "Apple Color Emoji", "Segoe UI Emoji"';
